@@ -1,0 +1,51 @@
+# Core Dependencies
+requests>=2.31.0
+python-dotenv>=1.0.0
+schedule>=1.2.0
+
+# OpenAI API
+openai>=1.3.0
+tenacity>=8.2.3
+psycopg[binary]>=3.2.1
+supabase>=2.5.0
+
+# Web Framework and Extensions
+Flask>=3.0.0
+Flask-Limiter>=3.5.0
+Flask-Caching>=2.1.0
+Flask-Compress>=1.14
+Flask-Cors>=4.0.0
+
+# Process Management and Monitoring
+psutil>=5.9.0
+
+# Date/Time Utilities
+python-dateutil>=2.8.2
+
+# JSON/Data Processing
+jsonschema>=4.19.0
+pandas>=2.0.0
+
+# Security and Validation
+cryptography>=41.0.0
+validators>=0.22.0
+
+# HTTP Client Enhancements
+urllib3>=2.0.0
+certifi>=2023.7.22
+
+# Logging Enhancements
+coloredlogs>=15.0.1
+
+# Configuration Management
+pydantic>=2.4.0
+
+# Rich Console Output
+rich>=13.5.0
+
+# YAML Support for Configuration
+PyYAML>=6.0.1
+
+# Timezone Support
+pytz>=2023.3
+voyageai>=0.2.0

@@ -1,0 +1,50 @@
+# DiatomsAI News Bot Configuration
+# Copy this file to .env and fill in your API keys
+
+# Required API Keys
+NEWSAPI_KEY=your_newsapi_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Telegram Bot Configuration (Primary notification method)
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_CHAT_ID=your_telegram_chat_id_here
+
+# Email Configuration (Optional)
+EMAIL_ENABLED=false
+EMAIL_SMTP_SERVER=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_FROM=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password_here
+EMAIL_TO=recipient@gmail.com
+
+# Discord Webhook Configuration (Optional)
+DISCORD_ENABLED=false
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook_url_here
+
+# Pushover Configuration (Optional)
+PUSHOVER_ENABLED=false
+PUSHOVER_TOKEN=your_pushover_app_token_here
+PUSHOVER_USER=your_pushover_user_key_here
+
+# Database Configuration
+DB_PATH=news_bot.db
+
+# API Rate Limits
+NEWSAPI_RATE_LIMIT=1000
+OPENAI_RATE_LIMIT=60
+REQUEST_TIMEOUT=30
+
+# Bot Settings
+MAX_ARTICLES_PER_RUN=200
+MIN_ARTICLES_FOR_ANALYSIS=5
+ANALYSIS_QUALITY_THRESHOLD=0.3
+
+# Notification Settings
+NOTIFICATION_RETRY_ATTEMPTS=3
+NOTIFICATION_RETRY_DELAY=5.0
+
+# Flask Web Interface
+FLASK_SECRET_KEY=your_secret_key_here
+FLASK_ENV=development
+PORT=5001

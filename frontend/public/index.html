@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/logo192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/logo512.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WatchfulEye</title>
+    <meta name="description" content="WatchfulEye – real-time geopolitical intelligence and AI analysis." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="WatchfulEye" />
+    <meta property="og:description" content="Real-time geopolitical news analysis and investment intelligence powered by AI." />
+    <meta property="og:image" content="/watchfullogo.png" />
+    <meta property="og:image:alt" content="WatchfulEye logo" />
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="WatchfulEye" />
+    <meta property="twitter:description" content="Real-time geopolitical news analysis and investment intelligence powered by AI." />
+    <meta property="twitter:image" content="/watchfullogo.png" />
+    <script>
+      (function() {
+        try {
+          var storedTheme = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var shouldUseDark = storedTheme === 'dark' || (!storedTheme && prefersDark);
+          var root = document.documentElement;
+          if (shouldUseDark) {
+            root.classList.add('dark');
+          } else {
+            root.classList.remove('dark');
+          }
+        } catch (e) {
+          // no-op
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- React scripts will be injected by CRA -->
+  </body>
+</html>

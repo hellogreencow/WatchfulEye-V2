@@ -1,0 +1,211 @@
+{
+  "name": "Geo-Political News → Investment Idea → WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "custom",
+              "cronExpression": "0 */6 * * *",
+              "timezone": "UTC"
+            }
+          ]
+        }
+      },
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://newsapi.org/v2/everything",
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "q",
+              "value": "(geopolitics OR conflict OR sanctions OR \"world shifts\" OR trade)"
+            },
+            {
+              "name": "language",
+              "value": "en"
+            },
+            {
+              "name": "sortBy",
+              "value": "publishedAt"
+            },
+            {
+              "name": "pageSize",
+              "value": "40"
+            }
+          ]
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{$credentials.NewsAPI.apiKey}}"
+            }
+          ]
+        },
+        "responseFormat": "json"
+      },
+      "name": "Fetch Latest News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        420,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "1",
+          "name": "NewsAPI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Take first 20 articles, craft an LLM prompt\nconst articles = (items[0].json.articles || []).slice(0, 20);\nlet prompt = `Here are recent world & geopolitical headlines with short descriptions:\\n\\n`;\narticles.forEach((a, idx) => {\n  prompt += `${idx + 1}. ${a.title} — ${(a.description || '').replace(/\\n/g, ' ')}\\n`;\n});\n\nprompt += `\\nYou are a senior macro strategist at a global investment fund. Using ONLY the information above, propose up to three timely and concrete investment ideas (asset, ticker if possible, thesis, expected time-horizon, conviction level 1-5, and key risk). Return as clear bullet points.`;\nreturn [{ json: { prompt } }];"
+      },
+      "name": "Build LLM Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chatCompletion",
+        "model": "gpt-4o-mini",
+        "messagesUi": {
+          "message": [
+            {
+              "role": "system",
+              "content": "You are a professional investment analyst specialising in global macro and geopolitics."
+            },
+            {
+              "role": "user",
+              "content": "={{$json[\"prompt\"]}}"
+            }
+          ]
+        },
+        "temperature": 0.7
+      },
+      "name": "Generate Ideas (OpenAI)",
+      "type": "n8n-nodes-base.openai",
+      "typeVersion": 1,
+      "position": [
+        870,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "2",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const advice = items[0].json.choices[0].message.content.trim();\nconst timestamp = new Date().toLocaleString('en-US', { timeZone: 'UTC' });\nconst body = `🌍  Geo-Macro Investment Update (${timestamp} UTC)\\n\\n${advice}\\n\\n— Sent by DiatomsAI bot (not financial advice)`;\nreturn [{ json: { body } }];"
+      },
+      "name": "Format WhatsApp Text",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1090,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "from": "whatsapp:+14155238886",
+        "to": "whatsapp:+1234567890",
+        "message": "={{$json[\"body\"]}}"
+      },
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1310,
+        300
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "3",
+          "name": "Twilio account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Latest News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Latest News": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Ideas (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Ideas (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Format WhatsApp Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format WhatsApp Text": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": "3"
+}
+
+

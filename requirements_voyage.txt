@@ -1,0 +1,10 @@
+# Enhanced requirements for voyage-3.5-lite and Rerank-2.5 integration
+openai>=1.0.0
+requests>=2.28.0
+numpy>=1.21.0
+python-dotenv>=0.19.0
+voyageai>=0.2.0  # Updated for Rerank-2.5 support
+# Additional dependencies for enhanced RAG
+sentence-transformers>=2.2.0
+chromadb>=0.4.0
+scikit-learn>=1.1.0

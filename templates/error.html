@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WatchfulEye - {{ error_title or 'Error' }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'diatoms-blue': '#0f172a',
+                        'diatoms-accent': '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-diatoms-blue shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="text-white text-xl font-bold">
+                        <i class="fas fa-globe-americas mr-2 text-diatoms-accent"></i>
+                        WatchfulEye
+                    </a>
+                </div>
+                <a href="/" class="text-white hover:text-diatoms-accent transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Error Content -->
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div class="text-center">
+            <i class="fas fa-exclamation-triangle text-6xl text-red-500 mb-6"></i>
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">{{ error_title or 'Something went wrong' }}</h1>
+            <p class="text-xl text-gray-600 mb-8">{{ error_message or 'An unexpected error occurred.' }}</p>
+            <a href="/" class="bg-diatoms-accent text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="fas fa-home mr-2"></i>Return to Dashboard
+            </a>
+        </div>
+    </div>
+</body>
+</html> 
