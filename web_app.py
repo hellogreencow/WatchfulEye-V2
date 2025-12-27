@@ -483,7 +483,7 @@ def _embed_text_openai(text: str) -> list:
     return resp.data[0].embedding
 
 def _embed_text_voyage(text: str) -> list:
-    """Embed with voyage-3-large (2048 dims) when configured."""
+    """Embed with voyage-3-large (1024 dims) when configured."""
     if not VOYAGE_API_KEY:
         raise RuntimeError("VOYAGE_API_KEY not configured")
     import voyageai as _voy
@@ -1939,17 +1939,18 @@ def execute_search_rag(user_message: str, timeframe: Optional[str] = None,
                 )
 
             if candidates:
-                # Ensure embeddings exist for top-N candidates so we can semantic-rerank.
-                for c in candidates[: min(24, len(candidates))]:
-                    _get_or_create_article_embedding(
-                        {
-                            "id": c["id"],
-                            "title": c.get("title") or "",
-                            "description": c.get("description") or "",
-                            "excerpt": c.get("excerpt") or "",
-                            "extracted_text": c.get("extracted_text") or "",
-                        }
-                    )
+                # Only ensure embeddings when semantic is enabled (avoids unnecessary costs/errors in FTS-only mode).
+                if not DISABLE_SEMANTIC:
+                    for c in candidates[: min(24, len(candidates))]:
+                        _get_or_create_article_embedding(
+                            {
+                                "id": c["id"],
+                                "title": c.get("title") or "",
+                                "description": c.get("description") or "",
+                                "excerpt": c.get("excerpt") or "",
+                                "extracted_text": c.get("extracted_text") or "",
+                            }
+                        )
 
                 dist_map: Dict[int, float] = {}
                 if not DISABLE_SEMANTIC:

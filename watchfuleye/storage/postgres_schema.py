@@ -189,12 +189,10 @@ SCHEMA_STATEMENTS: list[str] = [
     """
     CREATE TABLE IF NOT EXISTS article_embeddings_voyage (
       article_id BIGINT PRIMARY KEY,
-      embedding vector(2048),
+      embedding vector(1024),
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     """,
-    # NOTE: pgvector indexing methods currently error above 2000 dimensions.
-    # Voyage-3-large embeddings are 2048 dims, so we store them but do not create a vector index.
 ]
 
 
@@ -205,5 +203,40 @@ def ensure_postgres_schema(pg_dsn: str, *, statements: Optional[Iterable[str]] =
         with conn.cursor() as cur:
             for s in stmts:
                 cur.execute(s)
+
+            # Safety: ensure embedding column dimensions match our configured models.
+            # pgvector stores dimension in atttypmod for vector columns.
+            def _ensure_dim(table: str, dim: int) -> None:
+                cur.execute(
+                    """
+                    SELECT a.atttypmod
+                    FROM pg_attribute a
+                    JOIN pg_class c ON c.oid=a.attrelid
+                    JOIN pg_namespace n ON n.oid=c.relnamespace
+                    WHERE c.relname=%s AND a.attname='embedding' AND a.attnum>0
+                    """,
+                    (table,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return
+                current = int(row[0] or 0)
+                if current == dim:
+                    return
+                # Attempt in-place migration; will fail if existing rows cannot be cast.
+                cur.execute(f"ALTER TABLE {table} ALTER COLUMN embedding TYPE vector({dim}) USING embedding::vector({dim})")
+
+            _ensure_dim("article_embeddings", 1536)
+            _ensure_dim("article_embeddings_voyage", 1024)
+
+            # Create voyage vector index after migration (older installs may have had 2048 dims).
+            try:
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_article_embeddings_voyage_hnsw "
+                    "ON article_embeddings_voyage USING hnsw (embedding vector_cosine_ops);"
+                )
+            except Exception:
+                # If pgvector/index method can't support it, skip (FTS-only fallback remains).
+                pass
 
 
