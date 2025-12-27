@@ -921,16 +921,27 @@ OUTPUT ONLY VALID JSON - NO OTHER TEXT."""
             
             try:
                 # Use curl with the exact same parameters that work
+                # SECURITY: never put API keys in process args (visible via ps/systemctl status).
+                # curl supports reading headers from a file/stdin via `-H @-`.
+                headers_text = (
+                    f"Authorization: Bearer {self.config.openrouter_api_key}\n"
+                    "Content-Type: application/json\n"
+                    "HTTP-Referer: https://watchfuleye.us\n"
+                )
                 curl_cmd = [
                     'curl', '-X', 'POST', url,
-                    '-H', f'Authorization: Bearer {self.config.openrouter_api_key}',
-                    '-H', 'Content-Type: application/json',
-                    '-H', 'HTTP-Referer: https://watchfuleye.us',
+                    '-H', '@-',
                     '-d', f'@{temp_file}',
                     '--silent'
                 ]
                 
-                result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=60)
+                result = subprocess.run(
+                    curl_cmd,
+                    input=headers_text,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
                 
                 if result.returncode != 0:
                     logger.error(f"Curl failed with return code {result.returncode}: {result.stderr}")
