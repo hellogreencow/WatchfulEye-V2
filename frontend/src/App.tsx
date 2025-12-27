@@ -1,13 +1,16 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import WatchfulEyeLogo from './components/WatchfulEyeLogo';
 import ChimeraCockpit from './components/ChimeraCockpit';
+import FigmaPreview from './FigmaPreview';
 
 function App() {
-  const isAuthed = !!localStorage.getItem('auth_token');
+  const isFigmaMode = process.env.REACT_APP_FIGMA_MODE === 'true';
+  const RouterImpl = isFigmaMode ? HashRouter : BrowserRouter;
+  const isAuthed = isFigmaMode || !!localStorage.getItem('auth_token');
   return (
-    <Router>
+    <RouterImpl>
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
         {/* Navigation (hidden until authenticated) */}
         {isAuthed && (
@@ -22,7 +25,7 @@ function App() {
                     to="/" 
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-2 rounded-md text-sm font-medium"
                   >
-                    Dashboard
+                    {isFigmaMode ? 'Figma Preview' : 'Dashboard'}
                   </Link>
                   <div className="relative">
                     <span 
@@ -41,11 +44,11 @@ function App() {
 
         {/* Routes */}
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={isFigmaMode ? <FigmaPreview /> : <Dashboard />} />
           <Route path="/chimera" element={isAuthed ? <ChimeraCockpit /> : <Navigate to="/" replace />} />
         </Routes>
       </div>
-    </Router>
+    </RouterImpl>
   );
 }
 
