@@ -1,0 +1,35 @@
+{
+  "short_name": "WatchfulEye",
+  "name": "WatchfulEye - Geopolitical Intelligence",
+  "description": "Real-time geopolitical news analysis and investment intelligence powered by AI",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "watchfullogo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "watchfullogo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "watchfullogo.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "id": "watchfuleye-app"
+}

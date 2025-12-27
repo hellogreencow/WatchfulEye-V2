@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WatchfulEye - Analysis #{{ analysis.id }}</title>
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="WatchfulEye - Analysis #{{ analysis.id }}">
+    <meta property="og:description" content="AI-powered geopolitical intelligence analysis">
+    <meta property="og:image" content="/watchfullogo.png">
+    <meta property="og:image:alt" content="WatchfulEye logo">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="WatchfulEye - Analysis #{{ analysis.id }}">
+    <meta name="twitter:description" content="AI-powered geopolitical intelligence analysis">
+    <meta name="twitter:image" content="/watchfullogo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'diatoms-blue': '#0f172a',
+                        'diatoms-accent': '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .analysis-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-bottom: 1.5rem;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .breaking-news {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        .key-numbers {
+            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+        }
+        .market-pulse {
+            background: linear-gradient(135deg, #45b7d1 0%, #3498db 100%);
+        }
+        .crypto-barometer {
+            background: linear-gradient(135deg, #f39c12 0%, #d35400 100%);
+        }
+        .tech-emergence {
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+        }
+        .idea-desk {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        }
+        .risk-radar {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+        .source-link {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+            text-decoration: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .source-link:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-diatoms-blue shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="text-white text-xl font-bold">
+                        <i class="fas fa-globe-americas mr-2 text-diatoms-accent"></i>
+                        WatchfulEye
+                    </a>
+                </div>
+                <a href="/" class="text-white hover:text-diatoms-accent transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Analysis Header -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                        <i class="fas fa-brain text-purple-600 mr-3"></i>
+                        Intelligence Analysis #{{ analysis.id }}
+                    </h1>
+                    <div class="flex items-center space-x-4 text-sm text-gray-600">
+                        <span><i class="fas fa-calendar mr-1"></i>{{ analysis.timestamp_formatted or analysis.timestamp }}</span>
+                        <span><i class="fas fa-clock mr-1"></i>{{ analysis.time_ago }}</span>
+                        <span><i class="fas fa-microchip mr-1"></i>{{ analysis.model_used or 'AI Model' }}</span>
+                        <span><i class="fas fa-articles mr-1"></i>{{ analysis.article_count or 0 }} sources</span>
+                        {% if analysis.processing_time %}
+                        <span><i class="fas fa-stopwatch mr-1"></i>{{ "%.1f"|format(analysis.processing_time) }}s</span>
+                        {% endif %}
+                        {% if analysis.quality_score %}
+                        <span><i class="fas fa-star mr-1"></i>{{ "%.1f"|format(analysis.quality_score) }}/10</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="shareAnalysis()" class="bg-diatoms-accent text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-share mr-2"></i>Share
+                    </button>
+                    <button onclick="exportAnalysis()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                        <i class="fas fa-download mr-2"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {% if structured_data %}
+        <!-- Brief Topic Header -->
+        <div class="bg-gradient-to-r from-diatoms-blue to-purple-900 text-white rounded-lg p-6 mb-8 text-center">
+            <h2 class="text-4xl font-bold mb-2">#{{ structured_data.brief_topic or 'INTELLIGENCE' }}</h2>
+            <p class="text-xl opacity-90">{{ structured_data.get('timestamp', 'Current Intelligence Brief') }}</p>
+        </div>
+
+        <!-- Breaking News -->
+        {% if structured_data.breaking_news %}
+        <div class="analysis-section breaking-news">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Breaking News
+            </h3>
+            {% for item in structured_data.breaking_news %}
+            <div class="mb-6 p-4 bg-white bg-opacity-10 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <span class="bg-white text-red-600 px-2 py-1 rounded-full text-sm font-bold mr-3">
+                        TIER {{ item.tier or 1 }}
+                    </span>
+                    <span class="text-sm opacity-75">{{ item.timestamp_hint or item.time or 'Breaking' }}</span>
+                </div>
+                <h4 class="text-xl font-bold mb-2">{{ item.title or item.headline }}</h4>
+                <p class="mb-2">{{ item.summary or item.details or item.description }}</p>
+                {% if item.key_insight %}
+                <div class="bg-white bg-opacity-10 p-3 rounded mb-2">
+                    <strong>Key Insight:</strong> {{ item.key_insight }}
+                </div>
+                {% endif %}
+                {% if item.actionable_advice %}
+                <div class="bg-yellow-500 bg-opacity-20 p-3 rounded">
+                    <strong>Actionable Advice:</strong> {{ item.actionable_advice }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Key Numbers -->
+        {% if structured_data.key_numbers %}
+        <div class="analysis-section key-numbers">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-chart-bar mr-2"></i>Key Numbers
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {% for item in structured_data.key_numbers %}
+                <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                    <h4 class="font-bold text-lg mb-2">{{ item.label or item.title }}</h4>
+                    <p class="text-sm mb-2">{{ item.details or item.value }}</p>
+                    <p class="text-xs opacity-75">{{ item.description or item.context }}</p>
+                    {% if item.source_context %}
+                    <span class="source-link">{{ item.source_context }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Market Pulse -->
+        {% if structured_data.market_pulse %}
+        <div class="analysis-section market-pulse">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-chart-line mr-2"></i>Market Pulse
+            </h3>
+            {% for item in structured_data.market_pulse %}
+            <div class="mb-4 p-4 bg-white bg-opacity-10 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <h4 class="font-bold text-lg mr-3">{{ item.asset_class or item.asset }}</h4>
+                    <span class="text-2xl">{{ item.direction or '↔' }}</span>
+                </div>
+                {% if item.catalyst or item.reason %}
+                <p class="mb-2"><strong>Catalyst:</strong> {{ item.catalyst or item.reason }}</p>
+                {% endif %}
+                {% if item.context %}
+                <p class="mb-2"><strong>Context:</strong> {{ item.context }}</p>
+                {% endif %}
+                {% if item.why_it_matters %}
+                <div class="bg-white bg-opacity-10 p-3 rounded">
+                    <strong>Why it matters:</strong> {{ item.why_it_matters }}
+                </div>
+                {% endif %}
+                {% if item.source_context %}
+                <span class="source-link">{{ item.source_context }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Crypto Barometer -->
+        {% if structured_data.crypto_barometer %}
+        <div class="analysis-section crypto-barometer">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fab fa-bitcoin mr-2"></i>Crypto Barometer
+            </h3>
+            {% for item in structured_data.crypto_barometer %}
+            <div class="mb-4 p-4 bg-white bg-opacity-10 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <h4 class="font-bold text-lg mr-3">{{ item.token_name or item.token }}</h4>
+                    <span class="text-2xl mr-2">{{ item.direction or item.movement or '↔' }}</span>
+                    {% if item.percentage_change %}
+                    <span class="bg-white text-orange-600 px-2 py-1 rounded text-sm font-bold">
+                        {{ item.percentage_change }}
+                    </span>
+                    {% endif %}
+                </div>
+                {% if item.catalyst or item.catalyst_reason %}
+                <p class="mb-2"><strong>Catalyst:</strong> {{ item.catalyst or item.catalyst_reason }}</p>
+                {% endif %}
+                {% if item.details %}
+                <p class="mb-2">{{ item.details }}</p>
+                {% endif %}
+                {% if item.quick_take_themed or item.quick_take %}
+                <div class="bg-white bg-opacity-10 p-3 rounded">
+                    <strong>Quick Take:</strong> {{ item.quick_take_themed or item.quick_take }}
+                </div>
+                {% endif %}
+                {% if item.source_context %}
+                <span class="source-link">{{ item.source_context }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Tech Emergence -->
+        {% if structured_data.tech_emergence %}
+        <div class="analysis-section tech-emergence">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-flask mr-2"></i>Tech Emergence
+            </h3>
+            {% for item in structured_data.tech_emergence %}
+            <div class="p-4 bg-white bg-opacity-10 rounded-lg">
+                <p class="mb-3">{{ item.description or item.potential_impact }}</p>
+                <div class="bg-white bg-opacity-10 p-3 rounded">
+                    <strong>Adoption Outlook:</strong> {{ item.adoption_outlook }}
+                </div>
+                {% if item.source_context %}
+                <span class="source-link">{{ item.source_context }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Idea Desk -->
+        {% if structured_data.idea_desk %}
+        <div class="analysis-section idea-desk">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-lightbulb mr-2"></i>Investment Ideas
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for item in structured_data.idea_desk %}
+                <div class="p-4 bg-white bg-opacity-10 rounded-lg">
+                    <div class="flex items-center mb-2">
+                        <span class="bg-white text-green-600 px-3 py-1 rounded-full text-sm font-bold mr-3">
+                            {{ item.action or 'HOLD' }}
+                        </span>
+                        <h4 class="font-bold">{{ item.asset_ticker_class or item.ticker }}</h4>
+                    </div>
+                    <p class="text-sm">{{ item.rationale }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Risk Radar -->
+        {% if structured_data.risk_radar %}
+        <div class="analysis-section risk-radar">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Risk Radar
+            </h3>
+            {% for item in structured_data.risk_radar %}
+            <div class="mb-4 p-4 bg-white bg-opacity-10 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <h4 class="font-bold text-lg mr-3">{{ item.risk_type or item.risk }}</h4>
+                    {% if item.percentage or item.probability %}
+                    <span class="bg-white text-red-600 px-2 py-1 rounded text-sm font-bold">
+                        {{ item.percentage or item.probability }}
+                    </span>
+                    {% endif %}
+                </div>
+                <p>{{ item.description or item.details }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Executive Summary -->
+        {% if structured_data.executive_summary %}
+        <div class="bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-lg p-6">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-scroll mr-2"></i>Executive Summary
+            </h3>
+            <p class="text-lg leading-relaxed">{{ structured_data.executive_summary }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Final Intel -->
+        {% if structured_data.final_intel %}
+        <div class="bg-white rounded-lg shadow-lg p-6 mt-6">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-search mr-2"></i>Final Intel
+            </h3>
+            {% if structured_data.final_intel.summary %}
+            <p class="mb-3">{{ structured_data.final_intel.summary }}</p>
+            {% endif %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% if structured_data.final_intel.investment_horizon %}
+                <div class="p-3 bg-slate-50 rounded">
+                    <strong>Investment Horizon:</strong> {{ structured_data.final_intel.investment_horizon }}
+                </div>
+                {% endif %}
+                {% if structured_data.final_intel.key_risks %}
+                <div class="p-3 bg-slate-50 rounded">
+                    <strong>Key Risks:</strong>
+                    <ul class="list-disc ml-5 mt-2">
+                        {% for risk in structured_data.final_intel.key_risks %}
+                        <li>{{ risk }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Sources -->
+        {% set sources = structured_data.sources or structured_data.context_sources %}
+        {% if sources %}
+        <div class="bg-white rounded-lg shadow-lg p-6 mt-6">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-link mr-2"></i>Sources
+            </h3>
+            <div class="space-y-2">
+                {% for src in sources %}
+                <div class="text-sm">
+                    <span class="font-semibold">{{ src.title or src.headline or src.url or 'Source' }}</span>
+                    {% if src.url %}
+                    <a class="source-link ml-2" href="{{ src.url }}" target="_blank" rel="noopener">Open</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- All Raw Data (Collapsible) -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mt-6">
+            <details>
+                <summary class="cursor-pointer font-semibold">Show All Raw Data</summary>
+                <pre class="whitespace-pre-wrap text-gray-700 leading-relaxed mt-4">{{ structured_data | tojson(indent=2) }}</pre>
+            </details>
+        </div>
+
+        {% else %}
+        <!-- Fallback: Show regular content if no structured data -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h3 class="text-xl font-bold mb-4">Analysis Content</h3>
+            <div class="prose max-w-none">
+                <pre class="whitespace-pre-wrap text-gray-700 leading-relaxed">{{ analysis.content }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function shareAnalysis() {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'WatchfulEye Analysis #{{ analysis.id }}',
+                    text: 'Check out this geopolitical intelligence analysis',
+                    url: window.location.href
+                });
+            } else {
+                navigator.clipboard.writeText(window.location.href);
+                alert('Link copied to clipboard!');
+            }
+        }
+
+        function exportAnalysis() {
+            const data = {
+                analysis_id: {{ analysis.id }},
+                {% if structured_data %}
+                structured_data: {{ structured_data | tojson }},
+                {% endif %}
+                metadata: {
+                    timestamp: '{{ analysis.timestamp }}',
+                    model_used: '{{ analysis.model_used }}',
+                    article_count: {{ analysis.article_count or 0 }},
+                    processing_time: {{ analysis.processing_time or 0 }},
+                    quality_score: {{ analysis.quality_score or 0 }}
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `watchfuleye_analysis_{{ analysis.id }}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html> 

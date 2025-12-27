@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WatchfulEye - Geo-Political Intelligence Dashboard</title>
+    <meta name="description" content="Real-time geopolitical news analysis and investment intelligence powered by AI">
+    <meta name="author" content="WatchfulEye">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="WatchfulEye">
+    <meta property="og:description" content="Real-time geopolitical news analysis and investment intelligence powered by AI">
+    <meta property="og:image" content="/watchfullogo.png">
+    <meta property="og:image:alt" content="WatchfulEye logo">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="WatchfulEye">
+    <meta name="twitter:description" content="Real-time geopolitical news analysis and investment intelligence powered by AI">
+    <meta name="twitter:image" content="/watchfullogo.png">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'diatoms-blue': '#0f172a',
+                        'diatoms-accent': '#3b82f6',
+                        'sentiment-positive': '#10b981',
+                        'sentiment-negative': '#ef4444',
+                        'sentiment-neutral': '#6b7280'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Custom animations */
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        
+        .pulse-subtle {
+            animation: pulse-subtle 2s infinite;
+        }
+        
+        /* Smooth transitions */
+        .transition-smooth {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Custom scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation Header -->
+    <nav class="bg-diatoms-blue shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-white text-xl font-bold">
+                        <i class="fas fa-globe-americas mr-2 text-diatoms-accent"></i>
+                        WatchfulEye
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center text-white text-sm">
+                        <i class="fas fa-clock mr-1"></i>
+                        <span id="current-time">{{ current_time or '' }}</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 bg-green-500 rounded-full pulse-subtle mr-2"></div>
+                        <span class="text-white text-sm">Live</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Alert Banner -->
+        <div id="alert-banner" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-lg">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="ml-3">
+                    <p id="alert-message" class="text-sm"></p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <div class="flex">
+                        <button onclick="closeAlert()" class="text-yellow-700 hover:text-yellow-900">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-smooth">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-newspaper text-2xl text-diatoms-accent"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Articles</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="total-articles">{{ stats.total_articles or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-smooth">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-chart-line text-2xl text-sentiment-positive"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Positive Sentiment</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="positive-sentiment">{{ stats.sentiment_distribution.positive or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-smooth">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-chart-line text-2xl text-sentiment-negative"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Negative Sentiment</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="negative-sentiment">{{ stats.sentiment_distribution.negative or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-smooth">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-brain text-2xl text-purple-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">AI Analyses</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="total-analyses">{{ recent_analyses|length or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Column: Filters and Charts -->
+            <div class="lg:col-span-1 space-y-6">
+                
+                <!-- Filters Panel -->
+                <div class="bg-white shadow-lg rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-filter mr-2 text-diatoms-accent"></i>
+                        Filters
+                    </h3>
+                    
+                    <!-- Search -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                        <div class="relative">
+                            <input
+                                type="text"
+                                id="search-input"
+                                placeholder="Search articles..."
+                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-diatoms-accent focus:border-transparent"
+                            >
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-search text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Category Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <select id="category-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-diatoms-accent focus:border-transparent">
+                            <option value="">All Categories</option>
+                            <option value="conflict">Conflict</option>
+                            <option value="sanctions">Sanctions</option>
+                            <option value="trade">Trade</option>
+                            <option value="diplomacy">Diplomacy</option>
+                            <option value="economics">Economics</option>
+                            <option value="energy">Energy</option>
+                            <option value="technology">Technology</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Sentiment Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Sentiment</label>
+                        <select id="sentiment-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-diatoms-accent focus:border-transparent">
+                            <option value="">All Sentiments</option>
+                            <option value="positive">Positive</option>
+                            <option value="neutral">Neutral</option>
+                            <option value="negative">Negative</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Time Range -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Time Range</label>
+                        <select id="time-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-diatoms-accent focus:border-transparent">
+                            <option value="">All Time</option>
+                            <option value="6">Last 6 Hours</option>
+                            <option value="24">Last 24 Hours</option>
+                            <option value="72">Last 3 Days</option>
+                            <option value="168">Last Week</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Apply Filters Button -->
+                    <button
+                        onclick="applyFilters()"
+                        class="w-full bg-diatoms-accent text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-smooth"
+                    >
+                        <i class="fas fa-filter mr-2"></i>
+                        Apply Filters
+                    </button>
+                    
+                    <!-- Clear Filters Button -->
+                    <button
+                        onclick="clearFilters()"
+                        class="w-full mt-2 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-smooth"
+                    >
+                        <i class="fas fa-times mr-2"></i>
+                        Clear Filters
+                    </button>
+                </div>
+                
+                <!-- Charts -->
+                <div class="bg-white shadow-lg rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-chart-pie mr-2 text-diatoms-accent"></i>
+                        Category Distribution
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white shadow-lg rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                        <i class="fas fa-chart-bar mr-2 text-diatoms-accent"></i>
+                        Sentiment Analysis
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column: Articles and Analyses -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Tab Navigation -->
+                <div class="bg-white shadow-lg rounded-lg">
+                    <div class="border-b border-gray-200">
+                        <nav class="-mb-px flex">
+                            <button
+                                onclick="switchTab('articles')"
+                                id="articles-tab"
+                                class="w-1/2 py-4 px-6 text-center border-b-2 border-diatoms-accent text-diatoms-accent font-medium"
+                            >
+                                <i class="fas fa-newspaper mr-2"></i>
+                                News Articles
+                            </button>
+                            <button
+                                onclick="switchTab('analyses')"
+                                id="analyses-tab"
+                                class="w-1/2 py-4 px-6 text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium"
+                            >
+                                <i class="fas fa-brain mr-2"></i>
+                                AI Analyses
+                            </button>
+                        </nav>
+                    </div>
+                    
+                    <!-- Articles Tab Content -->
+                    <div id="articles-content" class="p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">Recent Articles</h3>
+                            <div class="flex space-x-2">
+                                <button
+                                    onclick="refreshArticles()"
+                                    class="bg-diatoms-accent text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-smooth"
+                                >
+                                    <i class="fas fa-sync-alt mr-1"></i>
+                                    Refresh
+                                </button>
+                                <button
+                                    onclick="exportData('json')"
+                                    class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-smooth"
+                                >
+                                    <i class="fas fa-download mr-1"></i>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Loading Spinner -->
+                        <div id="articles-loading" class="hidden text-center py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl text-diatoms-accent"></i>
+                            <p class="text-gray-600 mt-2">Loading articles...</p>
+                        </div>
+                        
+                        <!-- Articles List -->
+                        <div id="articles-list" class="space-y-4 custom-scrollbar" style="max-height: 600px; overflow-y: auto;">
+                            {% for article in recent_articles %}
+                            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-smooth">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1">
+                                        <div class="flex items-center space-x-2 mb-2">
+                                            <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                                {{ article.category or 'general' }}
+                                            </span>
+                                            {% if article.sentiment_score %}
+                                                {% set sentiment_class = 'sentiment-positive' if article.sentiment_score > 0.1 else 'sentiment-negative' if article.sentiment_score < -0.1 else 'sentiment-neutral' %}
+                                                <span class="px-2 py-1 text-xs font-medium rounded-full bg-{{ sentiment_class }}">
+                                                    {% if article.sentiment_score > 0.1 %}
+                                                        📈 Positive
+                                                    {% elif article.sentiment_score < -0.1 %}
+                                                        📉 Negative
+                                                    {% else %}
+                                                        ➡️ Neutral
+                                                    {% endif %}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        <h4 class="text-lg font-medium text-gray-900 mb-2">{{ article.title }}</h4>
+                                        {% if article.description %}
+                                        <p class="text-gray-600 text-sm mb-2">{{ article.description[:200] }}{% if article.description|length > 200 %}...{% endif %}</p>
+                                        {% endif %}
+                                        <div class="flex items-center text-xs text-gray-500 space-x-4">
+                                            <span><i class="fas fa-calendar mr-1"></i>{{ article.created_at or 'Unknown' }}</span>
+                                            <span><i class="fas fa-source mr-1"></i>{{ article.source or 'Unknown' }}</span>
+                                            {% if article.url %}
+                                            <a href="{{ article.url }}" target="_blank" class="text-diatoms-accent hover:underline">
+                                                <i class="fas fa-external-link-alt mr-1"></i>Read More
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Analyses Tab Content -->
+                    <div id="analyses-content" class="p-6 hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">AI Investment Analyses</h3>
+                            <button
+                                onclick="refreshAnalyses()"
+                                class="bg-diatoms-accent text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-smooth"
+                            >
+                                <i class="fas fa-sync-alt mr-1"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        
+                        <!-- Loading Spinner -->
+                        <div id="analyses-loading" class="hidden text-center py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl text-diatoms-accent"></i>
+                            <p class="text-gray-600 mt-2">Loading analyses...</p>
+                        </div>
+                        
+                        <!-- Analyses List -->
+                        <div id="analyses-list" class="space-y-4 custom-scrollbar" style="max-height: 600px; overflow-y: auto;">
+                            {% for analysis in recent_analyses %}
+                            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-smooth">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center space-x-2">
+                                        <i class="fas fa-brain text-purple-600"></i>
+                                        <span class="text-sm font-medium text-gray-900">Analysis #{{ analysis.id }}</span>
+                                        <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                            {{ analysis.model_used or 'AI' }}
+                                        </span>
+                                    </div>
+                                    <span class="text-xs text-gray-500">{{ analysis.created_at or 'Unknown' }}</span>
+                                </div>
+                                <div class="text-sm text-gray-700 leading-relaxed">
+                                    {{ analysis.content[:500] }}{% if analysis.content|length > 500 %}...{% endif %}
+                                </div>
+                                {% if analysis.content|length > 500 %}
+                                <button
+                                    onclick="viewFullAnalysis('{{ analysis.id }}')"
+                                    class="mt-2 text-diatoms-accent text-sm hover:underline"
+                                >
+                                    Read Full Analysis
+                                </button>
+                                {% endif %}
+                                <div class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                                    <span>Articles: {{ analysis.article_count or 0 }}</span>
+                                    {% if analysis.processing_time %}
+                                    <span>Processing: {{ "%.1f"|format(analysis.processing_time) }}s</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Full Analysis -->
+    <div id="analysis-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-3/4 overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Full Analysis</h3>
+                    <button onclick="closeAnalysisModal()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div id="modal-analysis-content" class="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    <!-- Analysis content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-diatoms-blue text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <p class="text-sm">
+                    © 2024 WatchfulEye Intelligence System. 
+                    Powered by advanced AI for geopolitical analysis.
+                </p>
+                <p class="text-xs text-gray-400 mt-2">
+                    For educational purposes only. Not financial advice.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Global variables
+        let categoryChart, sentimentChart;
+        let currentFilters = {};
+        
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            // Auto-refresh data every 5 minutes
+            setInterval(refreshData, 300000);
+            
+            // Load initial data
+            loadStats();
+        });
+        
+        // Update clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toISOString().slice(0, 19) + ' UTC';
+        }
+        
+        // Initialize charts
+        function initializeCharts() {
+            // Category Distribution Chart
+            const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+            categoryChart = new Chart(categoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [
+                            '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
+                            '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 10,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Sentiment Chart
+            const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+            sentimentChart = new Chart(sentimentCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Positive', 'Neutral', 'Negative'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#10b981', '#6b7280', '#ef4444'],
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load statistics and update charts
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                updateStatCards(stats);
+                updateCharts(stats);
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                showAlert('Failed to load statistics', 'error');
+            }
+        }
+        
+        // Update stat cards
+        function updateStatCards(stats) {
+            document.getElementById('total-articles').textContent = stats.total_articles || 0;
+            document.getElementById('positive-sentiment').textContent = stats.sentiment_distribution?.positive || 0;
+            document.getElementById('negative-sentiment').textContent = stats.sentiment_distribution?.negative || 0;
+        }
+        
+        // Update charts with new data
+        function updateCharts(stats) {
+            // Update category chart
+            const categories = stats.categories || {};
+            const categoryLabels = Object.keys(categories);
+            const categoryCounts = Object.values(categories).map(cat => cat.count || 0);
+            
+            categoryChart.data.labels = categoryLabels.map(label => label.charAt(0).toUpperCase() + label.slice(1));
+            categoryChart.data.datasets[0].data = categoryCounts;
+            categoryChart.update();
+            
+            // Update sentiment chart
+            const sentiment = stats.sentiment_distribution || {};
+            sentimentChart.data.datasets[0].data = [
+                sentiment.positive || 0,
+                sentiment.neutral || 0,
+                sentiment.negative || 0
+            ];
+            sentimentChart.update();
+        }
+        
+        // Tab switching
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('[id$="-tab"]').forEach(btn => {
+                btn.classList.remove('border-diatoms-accent', 'text-diatoms-accent');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            document.getElementById(tab + '-tab').classList.remove('border-transparent', 'text-gray-500');
+            document.getElementById(tab + '-tab').classList.add('border-diatoms-accent', 'text-diatoms-accent');
+            
+            // Update content
+            document.getElementById('articles-content').classList.toggle('hidden', tab !== 'articles');
+            document.getElementById('analyses-content').classList.toggle('hidden', tab !== 'analyses');
+            
+            // Load data for the active tab
+            if (tab === 'articles') {
+                refreshArticles();
+            } else {
+                refreshAnalyses();
+            }
+        }
+        
+        // Apply filters
+        async function applyFilters() {
+            const filters = {
+                category: document.getElementById('category-filter').value,
+                sentiment: document.getElementById('sentiment-filter').value,
+                hours: document.getElementById('time-filter').value,
+                search: document.getElementById('search-input').value
+            };
+            
+            currentFilters = filters;
+            
+            // Build query parameters
+            const params = new URLSearchParams();
+            if (filters.category) params.set('category', filters.category);
+            if (filters.hours) params.set('hours', filters.hours);
+            if (filters.sentiment) {
+                if (filters.sentiment === 'positive') {
+                    params.set('min_sentiment', '0.1');
+                } else if (filters.sentiment === 'negative') {
+                    params.set('max_sentiment', '-0.1');
+                } else if (filters.sentiment === 'neutral') {
+                    params.set('min_sentiment', '-0.1');
+                    params.set('max_sentiment', '0.1');
+                }
+            }
+            
+            // Search functionality
+            if (filters.search) {
+                try {
+                    const searchParams = new URLSearchParams({ q: filters.search });
+                    const response = await fetch(`/api/search?${searchParams}`);
+                    const data = await response.json();
+                    displayArticles(data.articles || []);
+                } catch (error) {
+                    console.error('Search error:', error);
+                    showAlert('Search failed', 'error');
+                }
+                return;
+            }
+            
+            // Regular filter application
+            try {
+                showLoading('articles');
+                const response = await fetch(`/api/articles?${params}`);
+                const data = await response.json();
+                displayArticles(data.articles || []);
+            } catch (error) {
+                console.error('Filter error:', error);
+                showAlert('Failed to apply filters', 'error');
+            } finally {
+                hideLoading('articles');
+            }
+        }
+        
+        // Clear filters
+        function clearFilters() {
+            document.getElementById('category-filter').value = '';
+            document.getElementById('sentiment-filter').value = '';
+            document.getElementById('time-filter').value = '';
+            document.getElementById('search-input').value = '';
+            currentFilters = {};
+            refreshArticles();
+        }
+        
+        // Refresh articles
+        async function refreshArticles() {
+            try {
+                showLoading('articles');
+                const response = await fetch('/api/articles');
+                const data = await response.json();
+                displayArticles(data.articles || []);
+            } catch (error) {
+                console.error('Error refreshing articles:', error);
+                showAlert('Failed to refresh articles', 'error');
+            } finally {
+                hideLoading('articles');
+            }
+        }
+        
+        // Refresh analyses
+        async function refreshAnalyses() {
+            try {
+                showLoading('analyses');
+                const response = await fetch('/api/analyses');
+                const data = await response.json();
+                displayAnalyses(data.analyses || []);
+            } catch (error) {
+                console.error('Error refreshing analyses:', error);
+                showAlert('Failed to refresh analyses', 'error');
+            } finally {
+                hideLoading('analyses');
+            }
+        }
+        
+        // Display articles
+        function displayArticles(articles) {
+            const container = document.getElementById('articles-list');
+            container.innerHTML = '';
+            
+            if (articles.length === 0) {
+                container.innerHTML = '<div class="text-center py-8 text-gray-500">No articles found</div>';
+                return;
+            }
+            
+            articles.forEach(article => {
+                const articleEl = createArticleElement(article);
+                container.appendChild(articleEl);
+            });
+        }
+        
+        // Display analyses
+        function displayAnalyses(analyses) {
+            const container = document.getElementById('analyses-list');
+            container.innerHTML = '';
+            
+            if (analyses.length === 0) {
+                container.innerHTML = '<div class="text-center py-8 text-gray-500">No analyses found</div>';
+                return;
+            }
+            
+            analyses.forEach(analysis => {
+                const analysisEl = createAnalysisElement(analysis);
+                container.appendChild(analysisEl);
+            });
+        }
+        
+        // Create article element
+        function createArticleElement(article) {
+            const div = document.createElement('div');
+            div.className = 'border border-gray-200 rounded-lg p-4 hover:shadow-md transition-smooth';
+            
+            const sentimentClass = getSentimentClass(article.sentiment_score);
+            const sentimentLabel = getSentimentLabel(article.sentiment_score);
+            
+            div.innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                ${article.category || 'general'}
+                            </span>
+                            <span class="px-2 py-1 text-xs font-medium rounded-full ${sentimentClass}">
+                                ${sentimentLabel}
+                            </span>
+                        </div>
+                        <h4 class="text-lg font-medium text-gray-900 mb-2">${escapeHtml(article.title || '')}</h4>
+                        ${article.description ? `<p class="text-gray-600 text-sm mb-2">${escapeHtml(article.description.substring(0, 200))}${article.description.length > 200 ? '...' : ''}</p>` : ''}
+                        <div class="flex items-center text-xs text-gray-500 space-x-4">
+                            <span><i class="fas fa-calendar mr-1"></i>${article.time_ago || article.created_at_formatted || 'Unknown'}</span>
+                            <span><i class="fas fa-source mr-1"></i>${escapeHtml(article.source || 'Unknown')}</span>
+                            ${article.url ? `<a href="${escapeHtml(article.url)}" target="_blank" class="text-diatoms-accent hover:underline"><i class="fas fa-external-link-alt mr-1"></i>Read More</a>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return div;
+        }
+        
+        // Create analysis element
+        function createAnalysisElement(analysis) {
+            const div = document.createElement('div');
+            div.className = 'border border-gray-200 rounded-lg p-4 hover:shadow-md transition-smooth';
+            
+            div.innerHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-brain text-purple-600"></i>
+                        <span class="text-sm font-medium text-gray-900">Analysis #${analysis.id}</span>
+                        <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                            ${analysis.model_used || 'AI'}
+                        </span>
+                        ${analysis.raw_response_json ? `
+                        <span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                            <i class="fas fa-sitemap mr-1"></i>Structured
+                        </span>
+                        ` : ''}
+                    </div>
+                    <span class="text-xs text-gray-500">${analysis.time_ago || analysis.created_at_formatted || 'Unknown'}</span>
+                </div>
+                <div class="text-sm text-gray-700 leading-relaxed">
+                    ${escapeHtml((analysis.content || '').substring(0, 300))}${(analysis.content || '').length > 300 ? '...' : ''}
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                    <div class="flex space-x-2">
+                        <a href="/analysis/${analysis.id}" class="bg-diatoms-accent text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-smooth">
+                            <i class="fas fa-eye mr-1"></i>View Full Analysis
+                        </a>
+                        ${analysis.raw_response_json ? `
+                        <span class="bg-green-600 text-white px-2 py-1 rounded text-xs">
+                            <i class="fas fa-chart-bar mr-1"></i>Enhanced
+                        </span>
+                        ` : ''}
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        ${analysis.article_count || 0} sources
+                        ${analysis.processing_time ? ` • ${analysis.processing_time.toFixed(1)}s` : ''}
+                    </div>
+                </div>
+            `;
+            
+            return div;
+        }
+        
+        // Helper functions
+        function getSentimentClass(score) {
+            if (score > 0.1) return 'bg-sentiment-positive text-white';
+            if (score < -0.1) return 'bg-sentiment-negative text-white';
+            return 'bg-sentiment-neutral text-white';
+        }
+        
+        function getSentimentLabel(score) {
+            if (score > 0.1) return '📈 Positive';
+            if (score < -0.1) return '📉 Negative';
+            return '➡️ Neutral';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showLoading(type) {
+            document.getElementById(type + '-loading').classList.remove('hidden');
+        }
+        
+        function hideLoading(type) {
+            document.getElementById(type + '-loading').classList.add('hidden');
+        }
+        
+        function showAlert(message, type = 'info') {
+            const banner = document.getElementById('alert-banner');
+            const messageEl = document.getElementById('alert-message');
+            
+            messageEl.textContent = message;
+            banner.classList.remove('hidden');
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                banner.classList.add('hidden');
+            }, 5001);
+        }
+        
+        function closeAlert() {
+            document.getElementById('alert-banner').classList.add('hidden');
+        }
+        
+        // View full analysis in modal
+        async function viewFullAnalysis(analysisId) {
+            try {
+                const response = await fetch(`/api/analysis/${analysisId}`);
+                const analysis = await response.json();
+                
+                document.getElementById('modal-analysis-content').textContent = analysis.content || 'No content available';
+                document.getElementById('analysis-modal').classList.remove('hidden');
+                document.getElementById('analysis-modal').classList.add('flex');
+            } catch (error) {
+                console.error('Error loading analysis:', error);
+                showAlert('Failed to load full analysis', 'error');
+            }
+        }
+        
+        function closeAnalysisModal() {
+            document.getElementById('analysis-modal').classList.add('hidden');
+            document.getElementById('analysis-modal').classList.remove('flex');
+        }
+        
+        // Export functionality
+        async function exportData(format) {
+            try {
+                const response = await fetch(`/api/export?format=${format}&days=7`);
+                
+                if (format === 'json') {
+                    const data = await response.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    downloadBlob(blob, `watchfuleye_export_${new Date().toISOString().split('T')[0]}.json`);
+                } else if (format === 'csv') {
+                    const text = await response.text();
+                    const blob = new Blob([text], { type: 'text/csv' });
+                    downloadBlob(blob, `watchfuleye_export_${new Date().toISOString().split('T')[0]}.csv`);
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                showAlert('Export failed', 'error');
+            }
+        }
+        
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // Auto-refresh data
+        async function refreshData() {
+            await loadStats();
+            // Only refresh visible tab
+            const articlesVisible = !document.getElementById('articles-content').classList.contains('hidden');
+            if (articlesVisible) {
+                await refreshArticles();
+            } else {
+                await refreshAnalyses();
+            }
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey || event.metaKey) {
+                switch(event.key) {
+                    case 'r':
+                        event.preventDefault();
+                        refreshData();
+                        break;
+                    case 'f':
+                        event.preventDefault();
+                        document.getElementById('search-input').focus();
+                        break;
+                }
+            }
+            
+            if (event.key === 'Escape') {
+                closeAnalysisModal();
+                closeAlert();
+            }
+        });
+    </script>
+</body>
+</html> 
