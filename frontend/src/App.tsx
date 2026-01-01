@@ -1,16 +1,17 @@
 import React from 'react';
-import { BrowserRouter, HashRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import WatchfulEyeLogo from './components/WatchfulEyeLogo';
 import ChimeraCockpit from './components/ChimeraCockpit';
 import FigmaPreview from './FigmaPreview';
 
 function App() {
+  // IMPORTANT: The app must remain functional even if a build is accidentally produced with
+  // REACT_APP_FIGMA_MODE enabled. Figma preview must never take over the homepage.
   const isFigmaMode = process.env.REACT_APP_FIGMA_MODE === 'true';
-  const RouterImpl = isFigmaMode ? HashRouter : BrowserRouter;
-  const isAuthed = isFigmaMode || !!localStorage.getItem('auth_token');
+  const isAuthed = !!localStorage.getItem('auth_token');
   return (
-    <RouterImpl>
+    <BrowserRouter>
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
         {/* Navigation (hidden until authenticated) */}
         {isAuthed && (
@@ -25,8 +26,16 @@ function App() {
                     to="/" 
                     className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-2 rounded-md text-sm font-medium"
                   >
-                    {isFigmaMode ? 'Figma Preview' : 'Dashboard'}
+                    Dashboard
                   </Link>
+                  {isFigmaMode && (
+                    <Link
+                      to="/figma-preview"
+                      className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      Figma Preview
+                    </Link>
+                  )}
                   <div className="relative">
                     <span 
                       className="text-gray-400 px-3 py-2 rounded-md text-sm font-medium cursor-not-allowed blur-sm opacity-50"
@@ -44,11 +53,13 @@ function App() {
 
         {/* Routes */}
         <Routes>
-          <Route path="/" element={isFigmaMode ? <FigmaPreview /> : <Dashboard />} />
+          <Route path="/" element={<Dashboard />} />
+          {isFigmaMode && <Route path="/figma-preview" element={<FigmaPreview />} />}
           <Route path="/chimera" element={isAuthed ? <ChimeraCockpit /> : <Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-    </RouterImpl>
+    </BrowserRouter>
   );
 }
 
