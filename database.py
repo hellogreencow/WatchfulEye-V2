@@ -676,6 +676,25 @@ class NewsDatabase:
     def _enhanced_categorization(self, title: str, description: str) -> Tuple[str, float]:
         """Enhanced categorization with confidence scoring"""
         text = (title + " " + (description or "")).lower()
+
+        # Guardrail: prevent obvious sports/entertainment content from poisoning geopolitics categories
+        # (e.g., "Indiana Pacers" ending up under "sanctions" due to the word "sanctions"/"penalty").
+        sports_strong = [
+            "nba", "nfl", "mlb", "nhl", "ncaa", "wnba",
+            "premier league", "uefa", "fifa", "mls",
+            "pacers", "lakers", "warriors", "celtics", "knicks", "heat", "bulls", "spurs",
+            "touchdown", "quarterback", "home run", "stanley cup", "world cup",
+            "espn", "bleacher report", "fox sports",
+        ]
+        sports_weak = [
+            "playoffs", "season", "coach", "roster", "injury", "injured", "draft", "trade",
+            "final", "semifinal", "matchup", "vs.", "game-winning", "overtime",
+        ]
+        if any(k in text for k in sports_strong):
+            return "general", 0.15
+        weak_hits = sum(1 for k in sports_weak if k in text)
+        if weak_hits >= 3:
+            return "general", 0.15
         
         # Enhanced category keywords with weights
         categories = {
@@ -685,8 +704,13 @@ class NewsDatabase:
                 'weight': 1.0
             },
             'sanctions': {
-                'keywords': ['sanctions', 'embargo', 'penalty', 'restrict', 'ban', 'freeze', 
-                           'blacklist', 'asset freeze', 'economic pressure', 'punitive'],
+                # NOTE: keep these intentionally specific; broad terms like "penalty" or "ban"
+                # are common in sports/entertainment and cause category poisoning.
+                'keywords': [
+                    'sanctions', 'sanction', 'embargo', 'asset freeze', 'blacklist',
+                    'ofac', 'sdn', 'designated', 'designations', 'export controls', 'blocked',
+                    'secondary sanctions',
+                ],
                 'weight': 1.0
             },
             'trade': {
