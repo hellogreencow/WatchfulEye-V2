@@ -119,7 +119,7 @@ For any “baseline parity” panel (e.g., a **stock heatmap**), we do **not** o
 #### 2.2 Canonical entities (what we persist and render)
 - **IntelItem**: normalized item from any feed (news/telegram/market/event/dataset).
 - **Evidence**: raw payload + normalized fields + provenance + timestamps.
-- **Entity**: canonical identity for tickers/orgs/countries/people/sanctions targets with stable IDs.
+- **Entity**: canonical identity with stable IDs (**V1 scope**: tickers, countries, sanctions targets; **later**: orgs/people as governed sources exist).
 - **Identifier / Alias**: mappings for tickers/ISIN/CIK/domain/name variants → `Entity` (plus confidence + source).
 - **Investigation**: user‑initiated “Examine X” mission (scope, timebox, status).
 - **AgentRun / Step / ToolCall**: replayable run details + budgets + safety tags.
@@ -145,6 +145,45 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
 - Parallel work is fine, but **merge order is sequential** (WS0 → WS1 → WS2…).
 - Acceptance criteria must be met before merging.
 
+#### 3.5 Repo governance (non-negotiable)
+- **Auto-merge**: disabled by default; only enable auto-merge when **CI + required approvals + CodeRabbit are green** (low-risk PRs only).
+- **Protected `master`**:
+  - no direct pushes
+  - PR required + CI green + (at least) 1 approval
+- **One PR = one workstream slice**: never mix infra + frontend animation + categorization fixes in one PR.
+- **Branch naming**: `ws0/*`, `ws1/*`, `ws3/*`, `ws4/*`, `infra/*`, `docs/*`, `fix/*`.
+- **Enforcement**: these rules are enforced via GitHub **branch protection** + required checks + reviewer approval (verify in repo settings once, then treat as locked).
+
+#### 3.6 Staging discipline (do not break prod)
+- **Staging is Cloudflare Access-gated** (Zero Trust → Access) and must present a login wall.
+- **Origin is Cloudflare-only**: staging origin vhost denies non-Cloudflare source IPs (prevents bypassing Access via direct IP).
+- **Service isolation**:
+  - staging backend uses its own unit + port + DB snapshot (already `watchfuleye-backend-staging`, `127.0.0.1:5004`)
+  - staging frontend uses its own unit + port + build directory (avoid sharing `/opt/.../frontend/build` with prod)
+- **Deploy order**: staging first → validate → only then promote to prod when explicitly approved.
+
+#### 3.7 Review + shipping discipline (CodeRabbit-first, fast, auditable)
+**Goal**: PRs should be “merge-ready” on first open. We shift review left (CLI), but keep PRs for auditability + CI gating.
+
+- **Local preflight (required before every push)**:
+  - Run the relevant linters/typechecks/tests for the touched area.
+  - Run CodeRabbit CLI on your diff (see “CodeRabbit CLI” below).
+- **PR hygiene (required)**:
+  - Fill the PR template sections (briefly). Empty template sections are a merge blocker.
+  - One PR = one workstream slice.
+  - Include rollback (usually: flip flag off).
+- **Auto-merge policy**:
+  - Allowed only if: CI green + required approvals + CodeRabbit addressed + branch protection enforced.
+  - If any check is flaky: disable auto-merge and fix the check first (CI reliability is WS0).
+
+##### CodeRabbit CLI (pre-push gate)
+- Install: `curl -fsSL https://cli.coderabbit.ai/install.sh | sh`
+- Auth: `coderabbit auth login`
+- Review commands (use the narrowest diff):
+  - Uncommitted: `coderabbit review --plain -t uncommitted`
+  - Committed vs base: `coderabbit review --plain -t committed --base origin/master`
+- Hard rule: do not run CodeRabbit more than **3 times** per change set; fix everything it flags, then proceed.
+
 ---
 
 ### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
@@ -156,19 +195,58 @@ Each workstream below is designed to be **independently implemented** with minim
   - `/api/v3/*` endpoint map + request/response schemas.
   - Canonical DB schema for IntelItem/Evidence/Investigation/Report/AlertRule/ModuleSpec.
   - **Entity Resolution + Identifiers (contract-level dependency)**:
-    - `Entity`, `EntityIdentifier`, `EntityAlias` schemas
-    - minimal resolver: string → canonical entity (ticker/org/country/sanctions target) with confidence + provenance
-    - “same-as” linking for dedupe/merges and auditability
+    - Schemas:
+      - `Entity` (canonical identity)
+      - `EntityIdentifier` (ticker/ISIN/CIK/ISO codes → entity)
+      - `EntityAlias` (name variants/aliases → entity)
+    - **Resolver contract** (single, explicit surface):
+      - `POST /api/v3/entities/resolve`
+      - request: `{ "q": string, "k": number=10, "types": ["ticker"|"org"|"country"|"sanctions_target"] }`
+      - response: `{ "matches": [{ "entity_id": string, "entity_type": string, "label": string, "confidence": number(0..1), "provenance": {...} }], "trace_id": string }`
+    - **Confidence**:
+      - numeric \(0..1\)
+      - computed as: `confidence = base_source_weight * string_sim * type_consistency`
+        - `base_source_weight`: 1.0 for authoritative lists (OFAC/ISO), 0.7 for market data providers, 0.5 for extracted-from-text
+        - `string_sim`: normalized string similarity (e.g., Jaro-Winkler/Levenshtein ratio) with explicit default thresholds (configurable per `entity_type`)
+          - default thresholds:
+            - **0.90** for exact/normalized identifiers
+            - **0.80** for tickers/symbols
+            - **0.75** for fuzzy/name matches
+        - `type_consistency`: 1.0 if identifier type matches entity type, else 0.0
+    - **Provenance fields (returned on every match / stored on identifiers+aliases)**:
+      - `source_system` (e.g., `ofac_sdn`, `iso3166`, `provider_markets`)
+      - `source_record_id` (the upstream identifier if available)
+      - `ingest_timestamp` (UTC ISO)
+      - `match_algorithm` (e.g., `exact`, `normalized_exact`, `fuzzy_jw`, `manual`)
+      - `match_inputs` (normalized query + any parsed tokens)
+      - `curator_id` (nullable; set if a human overrides/merges)
+    - **Same-as linking semantics (dedupe without losing auditability)**:
+      - default: **link**, don’t merge (store `same_as` edges) unless confidence is high
+      - merge only when:
+        - authoritative identifier collision (same CIK/ISIN/OFAC id), OR
+        - confidence ≥ 0.95 and no conflicting authoritative identifiers
+      - conflicts: keep separate entities + create a `same_as` link marked `conflicted=true`
+      - audit trail: every merge/link/unlink is an append-only event with `who/when/why`
   - Event schema for structured logs (`event_type`, `workflow_id`, `latency_ms`, `user_id`, `trace_id`).
   - Budgets for agent runs (max steps, max tool calls, max time).
 - **Owns**:
   - `contracts/` (new) + `db/migrations/` (new) + `docs/V3_CONTRACTS.md` (new).
 - **Feature flags**:
   - `V3_API_ENABLED`, `V3_AUDIT_LOGS`.
-  - `V3_ENTITY_IDS`.
+  - `V3_ENTITY_IDS` (planned in WS0: gates Entity/Identifier/Alias APIs; default OFF in prod)
+  - `V3_HEATMAP_EMBED` (planned in WS0: enables embedded heatmap panel v1; default OFF in prod; used by WS7 modules)
 - **Acceptance**:
   - Contract docs exist, schemas compile, no production endpoints broken.
-  - The resolver can map at least: ticker→entity, country name→entity, sanctions list name→entity (with confidence + provenance).
+  - Coverage (minimum viable, explicit):
+    - **Tickers**: top **5,000** US equities by liquidity/market cap (ingested from a single chosen provider list)
+    - **Countries**: ISO-3166 country codes + common names
+    - **Sanctions**: OFAC SDN (and one consolidated sanctions list source, e.g. EU/UK/UN as available)
+  - Resolver behavior:
+    - returns **k** matches sorted by confidence
+    - returns confidence \(0..1\) + provenance object on every match
+    - enforces dedupe rules (exact id collisions collapse to 1; otherwise same-as links)
+  - Same-as semantics:
+    - merges are audited; links are reversible; conflicts never silently overwrite authoritative identifiers.
 
 #### WS1 — Main News Feed (Global Briefing) — Preserve + Professionalize
 - **Goal**: keep the existing main feed experience, but make the data plane authoritative.
@@ -393,6 +471,10 @@ Each workstream below is designed to be **independently implemented** with minim
   - `V3_MODULES`.
 - **Acceptance**:
   - Add/remove modules with no dead controls; layout persists across sessions.
+  - **Embed constraints (enforced)**:
+    - Layout + pins + user preferences are persisted **server-side** (no client-only `localStorage` as source of truth).
+    - Any user action inside an embed routes through **Examine**/**Monitor** and is logged (WS4 investigations feed-through + WS6 alert determinism).
+    - Embeds may not make raw, ungoverned client-side data calls. Data must come from **WS5 connector surfaces** (rate limits + compliance tags + Tier A/B approval), OR the embed is a sandboxed third-party surface with **no client secrets** and clearly treated as “display-only” (actions still route through Examine/Monitor).
 
 #### WS8 — AI Panel Builder + Panel Store (Your Differentiator)
 - **Goal**: “Create a panel for Iran sanctions” → generated module spec + preview + deploy.
