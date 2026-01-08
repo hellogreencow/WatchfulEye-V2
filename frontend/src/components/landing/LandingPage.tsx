@@ -8,6 +8,7 @@ import { CustomCursor } from './CustomCursor';
 import { SmoothScroll } from './SmoothScroll';
 import { ThemeProvider } from '../../lib/theme-context';
 import { Eye3D } from './EyeIcon';
+import { useRouteTransition } from '../../lib/routeTransition';
 
 function Footer() {
   const navigate = useNavigate();
@@ -65,6 +66,7 @@ function Footer() {
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const { transitionTo } = useRouteTransition();
 
   const handleNavigate = (view: 'home' | 'news' | 'login' | 'features') => {
     if (view === 'home') {
@@ -72,7 +74,8 @@ export function LandingPage() {
     } else if (view === 'news') {
       navigate('/news');
     } else if (view === 'login') {
-      navigate('/login');
+      // Full-page particle dissolve → route transition → reveal
+      transitionTo('/login');
     } else if (view === 'features') {
       navigate('/features');
     }

@@ -4,6 +4,36 @@
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
+// JSDOM does not implement canvas. Our landing/transition components use <canvas>
+// for particle effects, so stub a minimal 2D context for unit tests.
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  value: function getContext() {
+    // Minimal 2D context surface (no-ops) used by ParticleEyeHero/ParticleTransitionOverlay.
+    const noop = () => {};
+    return {
+      // state
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      globalAlpha: 1,
+      // transforms
+      setTransform: noop,
+      // rects
+      clearRect: noop,
+      fillRect: noop,
+      // paths
+      beginPath: noop,
+      arc: noop,
+      fill: noop,
+      stroke: noop,
+      moveTo: noop,
+      lineTo: noop,
+      // gradients
+      createRadialGradient: () => ({ addColorStop: noop }),
+    };
+  },
+});
+
 // CRA/Jest in this repo is not configured to transform ESM in node_modules.
 // axios (recent versions) ships ESM entrypoints, which breaks tests with:
 // "SyntaxError: Cannot use import statement outside a module".

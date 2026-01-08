@@ -74,6 +74,13 @@ export function Login({ onLogin }: { onLogin?: () => void }) {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [entranceReady, setEntranceReady] = useState(false);
+
+  // Let the route transition overlay do its reveal, then bring the card in.
+  useEffect(() => {
+    const t = window.setTimeout(() => setEntranceReady(true), 320);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,9 +165,10 @@ export function Login({ onLogin }: { onLogin?: () => void }) {
         {view === 'auth' ? (
           <motion.div
             key="auth-card"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, scale: 0.92, y: 14, filter: "blur(12px)" }}
+            animate={{ opacity: entranceReady ? 1 : 0, scale: entranceReady ? 1 : 0.92, y: entranceReady ? 0 : 14, filter: entranceReady ? "blur(0px)" : "blur(12px)" }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
             className="relative z-20 w-full max-w-md my-auto"
           >
             {/* Bio-Scan Auth Card */}

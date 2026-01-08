@@ -9,6 +9,7 @@ import { NewsPage } from './components/landing/NewsPage';
 import { Login } from './components/landing/Login';
 import { ManifestoSection } from './components/landing/ManifestoSection';
 import { AuthProvider } from './Dashboard';
+import { RouteTransitionProvider } from './lib/routeTransition';
 
 function App() {
   // IMPORTANT: The app must remain functional even if a build is accidentally produced with
@@ -20,32 +21,34 @@ function App() {
   
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
-        {/* Routes */}
-        <Routes>
-          {/* Public Landing Page - Always show landing page, Dashboard will handle its own auth */}
-          <Route path="/" element={<LandingPage />} />
-          
-          {/* Public Pages */}
-          <Route path="/news" element={<NewsPage />} />
-          <Route path="/login" element={
-            <AuthProvider>
-              <Login onLogin={() => window.location.href = '/dashboard'} />
-            </AuthProvider>
-          } />
-          <Route path="/features" element={<ManifestoSection />} />
-          
-          {/* Authenticated Routes - Dashboard handles its own auth check */}
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/chimera" element={hasAuthToken ? <ChimeraCockpit /> : <Navigate to="/login" replace />} />
-          
-          {/* Figma Preview (if enabled) */}
-          {isFigmaMode && <Route path="/figma-preview" element={<FigmaPreview />} />}
-          
-          {/* Catch all - redirect to home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
+      <RouteTransitionProvider>
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+          {/* Routes */}
+          <Routes>
+            {/* Public Landing Page - Always show landing page, Dashboard will handle its own auth */}
+            <Route path="/" element={<LandingPage />} />
+            
+            {/* Public Pages */}
+            <Route path="/news" element={<NewsPage />} />
+            <Route path="/login" element={
+              <AuthProvider>
+                <Login onLogin={() => window.location.href = '/dashboard'} />
+              </AuthProvider>
+            } />
+            <Route path="/features" element={<ManifestoSection />} />
+            
+            {/* Authenticated Routes - Dashboard handles its own auth check */}
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/chimera" element={hasAuthToken ? <ChimeraCockpit /> : <Navigate to="/login" replace />} />
+            
+            {/* Figma Preview (if enabled) */}
+            {isFigmaMode && <Route path="/figma-preview" element={<FigmaPreview />} />}
+            
+            {/* Catch all - redirect to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </RouteTransitionProvider>
     </BrowserRouter>
   );
 }
