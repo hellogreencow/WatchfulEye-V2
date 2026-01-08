@@ -119,7 +119,7 @@ For any “baseline parity” panel (e.g., a **stock heatmap**), we do **not** o
 #### 2.2 Canonical entities (what we persist and render)
 - **IntelItem**: normalized item from any feed (news/telegram/market/event/dataset).
 - **Evidence**: raw payload + normalized fields + provenance + timestamps.
-- **Entity**: canonical identity for tickers/orgs/countries/people/sanctions targets with stable IDs.
+- **Entity**: canonical identity for **tickers**, **countries**, and **sanctions targets** (including sanctioned individuals + entities) with stable IDs.
 - **Identifier / Alias**: mappings for tickers/ISIN/CIK/domain/name variants → `Entity` (plus confidence + source).
 - **Investigation**: user‑initiated “Examine X” mission (scope, timebox, status).
 - **AgentRun / Step / ToolCall**: replayable run details + budgets + safety tags.
@@ -179,7 +179,7 @@ Each workstream below is designed to be **independently implemented** with minim
       - `EntityAlias` (name variants/aliases → entity)
     - **Resolver contract** (single, explicit surface):
       - `POST /api/v3/entities/resolve`
-      - request: `{ "q": string, "k": number=10, "types": ["ticker"|"org"|"country"|"sanctions_target"] }`
+      - request: `{ "q": string, "k": number=10, "types": ["ticker"|"country"|"sanctions_target"] }`
       - response: `{ "matches": [{ "entity_id": string, "entity_type": string, "label": string, "confidence": number(0..1), "provenance": {...} }], "trace_id": string }`
     - **Confidence**:
       - numeric \(0..1\)
@@ -214,7 +214,8 @@ Each workstream below is designed to be **independently implemented** with minim
   - Coverage (minimum viable, explicit):
     - **Tickers**: top **5,000** US equities by liquidity/market cap (ingested from a single chosen provider list)
     - **Countries**: ISO-3166 country codes + common names
-    - **Sanctions**: OFAC SDN (and one consolidated sanctions list source, e.g. EU/UK/UN as available)
+    - **Sanctions**: OFAC SDN (and one consolidated sanctions list source, e.g. EU/UK/UN as available) including **individuals + entities**
+    - **Out of scope for V1**: general people/org resolution beyond sanctions targets (explicitly deferred until a governed source list exists)
   - Resolver behavior:
     - returns **k** matches sorted by confidence
     - returns confidence \(0..1\) + provenance object on every match
