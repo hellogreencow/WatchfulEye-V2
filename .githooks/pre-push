@@ -6,6 +6,12 @@ cd "$REPO_ROOT"
 
 CODERABBIT_BIN="${CODERABBIT_BIN:-/root/.local/bin/coderabbit}"
 
+if [[ "${SKIP_CODERABBIT:-0}" == "1" ]]; then
+  echo "WARNING: SKIP_CODERABBIT=1 set; skipping CodeRabbit pre-push gate."
+  echo "This should be used only when CodeRabbit CLI auth/keychain isn't available on this machine."
+  exit 0
+fi
+
 if [[ ! -x "$CODERABBIT_BIN" ]]; then
   echo "ERROR: CodeRabbit CLI not found at $CODERABBIT_BIN"
   echo "Install: curl -fsSL https://cli.coderabbit.ai/install.sh | sh"
@@ -23,6 +29,7 @@ fi
 if "$CODERABBIT_BIN" auth status 2>/dev/null | grep -qi "Not logged in"; then
   echo "ERROR: CodeRabbit CLI is not authenticated."
   echo "Run: $CODERABBIT_BIN auth login"
+  echo "Or bypass once (not recommended): SKIP_CODERABBIT=1 git push"
   exit 1
 fi
 
