@@ -119,7 +119,7 @@ For any “baseline parity” panel (e.g., a **stock heatmap**), we do **not** o
 #### 2.2 Canonical entities (what we persist and render)
 - **IntelItem**: normalized item from any feed (news/telegram/market/event/dataset).
 - **Evidence**: raw payload + normalized fields + provenance + timestamps.
-- **Entity**: canonical identity for **tickers**, **countries**, and **sanctions targets** (including sanctioned individuals + entities) with stable IDs.
+- **Entity**: canonical identity with stable IDs (**V1 scope**: tickers, countries, sanctions targets; **later**: orgs/people as governed sources exist).
 - **Identifier / Alias**: mappings for tickers/ISIN/CIK/domain/name variants → `Entity` (plus confidence + source).
 - **Investigation**: user‑initiated “Examine X” mission (scope, timebox, status).
 - **AgentRun / Step / ToolCall**: replayable run details + budgets + safety tags.
@@ -162,6 +162,28 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
   - staging frontend uses its own unit + port + build directory (avoid sharing `/opt/.../frontend/build` with prod)
 - **Deploy order**: staging first → validate → only then promote to prod when explicitly approved.
 
+#### 3.7 Review + shipping discipline (CodeRabbit-first, fast, auditable)
+**Goal**: PRs should be “merge-ready” on first open. We shift review left (CLI), but keep PRs for auditability + CI gating.
+
+- **Local preflight (required before every push)**:
+  - Run the relevant linters/typechecks/tests for the touched area.
+  - Run CodeRabbit CLI on your diff (see “CodeRabbit CLI” below).
+- **PR hygiene (required)**:
+  - Fill the PR template sections (briefly). Empty template sections are a merge blocker.
+  - One PR = one workstream slice.
+  - Include rollback (usually: flip flag off).
+- **Auto-merge policy**:
+  - Allowed only if: CI green + required approvals + CodeRabbit addressed + branch protection enforced.
+  - If any check is flaky: disable auto-merge and fix the check first (CI reliability is WS0).
+
+##### CodeRabbit CLI (pre-push gate)
+- Install: `curl -fsSL https://cli.coderabbit.ai/install.sh | sh`
+- Auth: `coderabbit auth login`
+- Review commands (use the narrowest diff):
+  - Uncommitted: `coderabbit review --plain -t uncommitted`
+  - Committed vs base: `coderabbit review --plain -t committed --base origin/master`
+- Hard rule: do not run CodeRabbit more than **3 times** per change set; fix everything it flags, then proceed.
+
 ---
 
 ### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
@@ -179,7 +201,7 @@ Each workstream below is designed to be **independently implemented** with minim
       - `EntityAlias` (name variants/aliases → entity)
     - **Resolver contract** (single, explicit surface):
       - `POST /api/v3/entities/resolve`
-      - request: `{ "q": string, "k": number=10, "types": ["ticker"|"country"|"sanctions_target"] }`
+      - request: `{ "q": string, "k": number=10, "types": ["ticker"|"org"|"country"|"sanctions_target"] }`
       - response: `{ "matches": [{ "entity_id": string, "entity_type": string, "label": string, "confidence": number(0..1), "provenance": {...} }], "trace_id": string }`
     - **Confidence**:
       - numeric \(0..1\)
@@ -214,8 +236,7 @@ Each workstream below is designed to be **independently implemented** with minim
   - Coverage (minimum viable, explicit):
     - **Tickers**: top **5,000** US equities by liquidity/market cap (ingested from a single chosen provider list)
     - **Countries**: ISO-3166 country codes + common names
-    - **Sanctions**: OFAC SDN (and one consolidated sanctions list source, e.g. EU/UK/UN as available) including **individuals + entities**
-    - **Out of scope for V1**: general people/org resolution beyond sanctions targets (explicitly deferred until a governed source list exists)
+    - **Sanctions**: OFAC SDN (and one consolidated sanctions list source, e.g. EU/UK/UN as available)
   - Resolver behavior:
     - returns **k** matches sorted by confidence
     - returns confidence \(0..1\) + provenance object on every match

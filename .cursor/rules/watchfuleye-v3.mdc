@@ -1,0 +1,41 @@
+---
+description: WatchfulEye V3 build discipline (workstreams, flags, CodeRabbit, push/PR hygiene)
+globs:
+  - "**/*"
+---
+
+## WatchfulEye V3 — Operating Rules (must follow)
+
+### Prime directive
+Ship V3 **without breaking** the existing UI and production surfaces. Everything is contract-first, flag-guarded, and auditable.
+
+### Workstream boundaries (no conflicts)
+- Every branch/PR maps to exactly **one** workstream slice (WS0..WS12).
+- If the task needs contract changes, route them through **WS0** and avoid drive-by edits across the repo.
+- Avoid editing shared “hot” files unless explicitly required; prefer new, owned files/dirs per workstream.
+
+### Feature flags (default OFF)
+- Any new surface must be behind a `V3_*` flag and default OFF.
+- Never remove or regress **Main News Feed**, **Custom News Feed**, **Telegram Intel Reports**, **Intel Reports**, or the **AI Analysis Modal**.
+
+### CodeRabbit-first workflow (shift review left)
+- Before pushing, run CodeRabbit CLI on the smallest relevant diff:
+  - `coderabbit review --plain -t uncommitted`
+  - or `coderabbit review --plain -t committed --base origin/master`
+- Hard rule: **max 3 CodeRabbit runs** per change set. Fix issues; don’t spam reruns.
+
+### Push/PR discipline (agents must finish the loop)
+- For any code/doc change:
+  - Commit on a correctly named branch (`wsX/*`, `infra/*`, `docs/*`, `fix/*`).
+  - Push branch to origin.
+  - Open a PR using the repo template and fill the required sections (briefly).
+- No direct pushes to `master`.
+
+### Merge discipline
+- CI green is non-negotiable. If CI becomes flaky/broken, fix CI before shipping features.
+- Auto-merge is only acceptable when CI + required approvals + CodeRabbit are green and branch protection is enforced.
+
+### Security/OSINT guardrails
+- No client secrets. No ungoverned scraping. High-risk connectors remain gated/off by default.
+- Every intelligence claim must be traceable to evidence and logged.
+

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+CODERABBIT_BIN="${CODERABBIT_BIN:-/root/.local/bin/coderabbit}"
+
+if [[ ! -x "$CODERABBIT_BIN" ]]; then
+  echo "ERROR: CodeRabbit CLI not found at $CODERABBIT_BIN"
+  echo "Install: curl -fsSL https://cli.coderabbit.ai/install.sh | sh"
+  echo "Then set CODERABBIT_BIN env var if installed elsewhere."
+  exit 1
+fi
+
+# Ensure auth exists; fail fast if not logged in (push discipline).
+if ! "$CODERABBIT_BIN" auth status >/dev/null 2>&1; then
+  echo "ERROR: CodeRabbit CLI auth status command failed."
+  echo "Try: $CODERABBIT_BIN auth login"
+  exit 1
+fi
+
+if "$CODERABBIT_BIN" auth status 2>/dev/null | grep -qi "Not logged in"; then
+  echo "ERROR: CodeRabbit CLI is not authenticated."
+  echo "Run: $CODERABBIT_BIN auth login"
+  exit 1
+fi
+
+echo "Running CodeRabbit (committed diff vs origin/master)..."
+"$CODERABBIT_BIN" review --plain -t committed --base origin/master
+
+echo "CodeRabbit passed. Continuing push."
+
+
