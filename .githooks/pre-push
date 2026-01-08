@@ -4,7 +4,8 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-CODERABBIT_BIN="${CODERABBIT_BIN:-/root/.local/bin/coderabbit}"
+# Preserve explicit override, otherwise default to the invoking user's home.
+CODERABBIT_BIN="${CODERABBIT_BIN:-$HOME/.local/bin/coderabbit}"
 
 if [[ "${SKIP_CODERABBIT:-0}" == "1" ]]; then
   echo "WARNING: SKIP_CODERABBIT=1 set; skipping CodeRabbit pre-push gate."
@@ -19,19 +20,16 @@ if [[ ! -x "$CODERABBIT_BIN" ]]; then
   exit 1
 fi
 
-# Ensure auth exists; fail fast if not logged in (push discipline).
+# Require CodeRabbit CLI auth; rely on exit code (don't parse output).
 if ! "$CODERABBIT_BIN" auth status >/dev/null 2>&1; then
-  echo "ERROR: CodeRabbit CLI auth status command failed."
-  echo "Try: $CODERABBIT_BIN auth login"
-  exit 1
-fi
-
-if "$CODERABBIT_BIN" auth status 2>/dev/null | grep -qi "Not logged in"; then
   echo "ERROR: CodeRabbit CLI is not authenticated."
   echo "Run: $CODERABBIT_BIN auth login"
   echo "Or bypass once (not recommended): SKIP_CODERABBIT=1 git push"
   exit 1
 fi
+
+echo "Fetching origin/master..."
+git fetch origin master:refs/remotes/origin/master 2>/dev/null || true
 
 echo "Running CodeRabbit (committed diff vs origin/master)..."
 "$CODERABBIT_BIN" review --plain -t committed --base origin/master

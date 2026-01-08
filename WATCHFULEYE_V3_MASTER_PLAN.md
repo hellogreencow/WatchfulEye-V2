@@ -146,7 +146,7 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
 - Acceptance criteria must be met before merging.
 
 #### 3.5 Repo governance (non-negotiable)
-- **No auto-merge**: disabled repo-wide; merges are manual and intentional.
+- **Auto-merge**: disabled by default; only enable auto-merge when **CI + required approvals + CodeRabbit are green** (low-risk PRs only).
 - **Protected `master`**:
   - no direct pushes
   - PR required + CI green + (at least) 1 approval
@@ -207,7 +207,11 @@ Each workstream below is designed to be **independently implemented** with minim
       - numeric \(0..1\)
       - computed as: `confidence = base_source_weight * string_sim * type_consistency`
         - `base_source_weight`: 1.0 for authoritative lists (OFAC/ISO), 0.7 for market data providers, 0.5 for extracted-from-text
-        - `string_sim`: normalized string similarity (e.g., Jaro-Winkler/Levenshtein ratio) with minimum thresholds per type
+        - `string_sim`: normalized string similarity (e.g., Jaro-Winkler/Levenshtein ratio) with explicit default thresholds (configurable per `entity_type`)
+          - default thresholds:
+            - **0.90** for exact/normalized identifiers
+            - **0.80** for tickers/symbols
+            - **0.75** for fuzzy/name matches
         - `type_consistency`: 1.0 if identifier type matches entity type, else 0.0
     - **Provenance fields (returned on every match / stored on identifiers+aliases)**:
       - `source_system` (e.g., `ofac_sdn`, `iso3166`, `provider_markets`)
@@ -229,8 +233,8 @@ Each workstream below is designed to be **independently implemented** with minim
   - `contracts/` (new) + `db/migrations/` (new) + `docs/V3_CONTRACTS.md` (new).
 - **Feature flags**:
   - `V3_API_ENABLED`, `V3_AUDIT_LOGS`.
-  - `V3_ENTITY_IDS` (enables Entity/Identifier/Alias APIs; default OFF in prod)
-  - `V3_HEATMAP_EMBED` (enables embedded heatmap panel v1; default OFF in prod; used by WS7 modules)
+  - `V3_ENTITY_IDS` (planned in WS0: gates Entity/Identifier/Alias APIs; default OFF in prod)
+  - `V3_HEATMAP_EMBED` (planned in WS0: enables embedded heatmap panel v1; default OFF in prod; used by WS7 modules)
 - **Acceptance**:
   - Contract docs exist, schemas compile, no production endpoints broken.
   - Coverage (minimum viable, explicit):

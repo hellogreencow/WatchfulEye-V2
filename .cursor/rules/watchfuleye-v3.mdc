@@ -33,7 +33,7 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
 
 ### Merge discipline
 - CI green is non-negotiable. If CI becomes flaky/broken, fix CI before shipping features.
-- Auto-merge is only acceptable when CI + required approvals + CodeRabbit are green and branch protection is enforced.
+- Auto-merge is disabled by default; only enable it when **CI + required approvals + CodeRabbit are green** (low-risk PRs only) and branch protection is enforced.
 
 ### Security/OSINT guardrails
 - No client secrets. No ungoverned scraping. High-risk connectors remain gated/off by default.
