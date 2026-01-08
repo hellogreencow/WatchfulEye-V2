@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector is required by our schema (CREATE EXTENSION vector; embedding columns).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: watchfuleye
           POSTGRES_USER: watchful
