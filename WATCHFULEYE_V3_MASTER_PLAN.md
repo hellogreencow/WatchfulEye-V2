@@ -152,7 +152,7 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
   - PR required + CI green + (at least) 1 approval
 - **One PR = one workstream slice**: never mix infra + frontend animation + categorization fixes in one PR.
 - **Branch naming**: `ws0/*`, `ws1/*`, `ws3/*`, `ws4/*`, `infra/*`, `docs/*`, `fix/*`.
- - **Enforcement**: these rules are enforced via GitHub **branch protection** + required checks + reviewer approval (verify in repo settings once, then treat as locked).
+- **Enforcement**: these rules are enforced via GitHub **branch protection** + required checks + reviewer approval (verify in repo settings once, then treat as locked).
 
 #### 3.6 Staging discipline (do not break prod)
 - **Staging is Cloudflare Access-gated** (Zero Trust → Access) and must present a login wall.
@@ -445,6 +445,10 @@ Each workstream below is designed to be **independently implemented** with minim
   - `V3_MODULES`.
 - **Acceptance**:
   - Add/remove modules with no dead controls; layout persists across sessions.
+  - **Embed constraints (enforced)**:
+    - Layout + pins + user preferences are persisted **server-side** (no client-only `localStorage` as source of truth).
+    - Any user action inside an embed routes through **Examine**/**Monitor** and is logged (WS4 investigations feed-through + WS6 alert determinism).
+    - Embeds may not make raw, ungoverned client-side data calls. Data must come from **WS5 connector surfaces** (rate limits + compliance tags + Tier A/B approval), OR the embed is a sandboxed third-party surface with **no client secrets** and clearly treated as “display-only” (actions still route through Examine/Monitor).
 
 #### WS8 — AI Panel Builder + Panel Store (Your Differentiator)
 - **Goal**: “Create a panel for Iran sanctions” → generated module spec + preview + deploy.
