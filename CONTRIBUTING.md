@@ -47,25 +47,14 @@
 - Provide a rollback plan (usually: flip a flag off).
 - Optional: use automated reviewers (e.g. CodeRabbit) and/or a second-pass LLM review (e.g. Claude Code) for risky changes, but CI is the hard gate.
 
-### CodeRabbit CLI (recommended: shift review left)
-We prefer CodeRabbit feedback **before** opening/iterating on PRs.
+### CodeRabbit (PR-only; no local pre-push gate)
+- CodeRabbit runs on **pull requests** via the GitHub app/checks.
+- We do **not** enforce CodeRabbit locally (no tracked pre-push hook), because headless servers often cannot persist auth.
 
-- Install: `curl -fsSL https://cli.coderabbit.ai/install.sh | sh`
-- Auth: `coderabbit auth login`
-- Review:
-  - Uncommitted: `coderabbit review --plain -t uncommitted`
-  - Committed vs base: `coderabbit review --plain -t committed --base origin/master`
+### Watching CodeRabbit without email
+Use the repo watcher script to print CodeRabbit bot comments + check status:
 
-#### Enforce CodeRabbit pre-push (recommended)
-This repo includes a tracked pre-push hook in `.githooks/pre-push`.
-
-Enable it once:
-- `./scripts/dev/setup-githooks.sh`
-
-Notes:
-- If you’re on a headless server and `coderabbit auth login` fails with `libsecret not available`,
-  install: `apt-get update && apt-get install -y libsecret-1-0`, then retry login.
-  If your environment has no OS keyring/session, run CodeRabbit locally (on a machine with a keychain)
-  and rely on the CodeRabbit GitHub check as the merge gate.
+- `python3 scripts/dev/watch_coderabbit_pr.py hellogreencow WatchfulEye-V2 123 --once`
+- Or continuous polling: `python3 scripts/dev/watch_coderabbit_pr.py hellogreencow WatchfulEye-V2 123 --interval 60`
 
 

@@ -167,7 +167,6 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
 
 - **Local preflight (required before every push)**:
   - Run the relevant linters/typechecks/tests for the touched area.
-  - Run CodeRabbit CLI on your diff (see “CodeRabbit CLI” below).
 - **PR hygiene (required)**:
   - Fill the PR template sections (briefly). Empty template sections are a merge blocker.
   - One PR = one workstream slice.
@@ -176,13 +175,12 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
   - Allowed only if: CI green + required approvals + CodeRabbit addressed + branch protection enforced.
   - If any check is flaky: disable auto-merge and fix the check first (CI reliability is WS0).
 
-##### CodeRabbit CLI (pre-push gate)
-- Install: `curl -fsSL https://cli.coderabbit.ai/install.sh | sh`
-- Auth: `coderabbit auth login`
-- Review commands (use the narrowest diff):
-  - Uncommitted: `coderabbit review --plain -t uncommitted`
-  - Committed vs base: `coderabbit review --plain -t committed --base origin/master`
-- Hard rule: do not run CodeRabbit more than **3 times** per change set; fix everything it flags, then proceed.
+##### CodeRabbit (PR-only; no local pre-push gate)
+- CodeRabbit runs on **pull requests** via the GitHub app/checks.
+- We do **not** block pushes on CodeRabbit CLI auth (headless servers commonly fail secure credential storage).
+- Watching without email:
+  - Use `python3 scripts/dev/watch_coderabbit_pr.py <owner> <repo> <pr_number> --interval 60`
+  - Or ask the Cursor agent: “check PR #N CodeRabbit” (agent will fetch via GitHub MCP).
 
 ---
 

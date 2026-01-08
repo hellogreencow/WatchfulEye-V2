@@ -18,11 +18,10 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
 - Any new surface must be behind a `V3_*` flag and default OFF.
 - Never remove or regress **Main News Feed**, **Custom News Feed**, **Telegram Intel Reports**, **Intel Reports**, or the **AI Analysis Modal**.
 
-### CodeRabbit-first workflow (shift review left)
-- Before pushing, run CodeRabbit CLI on the smallest relevant diff:
-  - `coderabbit review --plain -t uncommitted`
-  - or `coderabbit review --plain -t committed --base origin/master`
-- Hard rule: **max 3 CodeRabbit runs** per change set. Fix issues; don’t spam reruns.
+### CodeRabbit workflow (PR-only; no local pre-push gate)
+- CodeRabbit runs on **pull requests** via the GitHub app/checks.
+- Do **not** block pushes on CodeRabbit CLI auth (headless servers often fail secure credential storage).
+- Treat **CodeRabbit + CI + approval** as merge gates (not email).
 
 ### Push/PR discipline (agents must finish the loop)
 - For any code/doc change:
@@ -30,6 +29,12 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
   - Push branch to origin.
   - Open a PR using the repo template and fill the required sections (briefly).
 - No direct pushes to `master`.
+
+### Watching CodeRabbit without email (agent must support)
+- If Oli asks “check PR #N CodeRabbit”, use GitHub MCP to fetch and summarize:
+  - PR check status for the head SHA
+  - review threads/comments (filter CodeRabbit bot)
+  - unresolved items (actionable list)
 
 ### Merge discipline
 - CI green is non-negotiable. If CI becomes flaky/broken, fix CI before shipping features.
