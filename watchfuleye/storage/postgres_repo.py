@@ -120,7 +120,8 @@ class PostgresRepo:
             with psycopg.connect(self.pg_dsn) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT COUNT(*) FROM articles")
-                    total = int(cur.fetchone()[0] or 0)
+                    row = cur.fetchone()
+                    total = int(row[0] or 0) if row is not None else 0
         except Exception:
             total = 0
         return processed, total
