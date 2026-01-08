@@ -1,0 +1,472 @@
+## WatchfulEye V3 — Master Plan (Single Source of Truth)
+
+### Intent / Stakes / Success Criteria
+- **Intent**: Ship a **billion‑dollar‑professional** intelligence platform by upgrading the **data plane + agent plane** under the existing UI so we don’t break the current look/feel.
+- **Stakes**: Parallel work without boundaries causes merge conflicts, regressions, and “half‑wired” features that degrade trust.
+- **Success Criteria**: Every feature is tracked as a **workstream card** with (interfaces → owned files → feature flags → acceptance criteria). We preserve **Main News Feed**, **Custom News Feed**, and **Telegram Intel Reports** while making the agent truly agentic across expanded sources.
+
+---
+
+### 0) Non‑Negotiables (do not delete, do not regress)
+- **Main News Feed**: the canonical global briefing stream (fast, filterable, searchable).
+- **Custom News Feed**: user‑defined topics/watchlists/saved searches + alert rules.
+- **Telegram Intel Reports**: first‑class “intel report” feed + raw message evidence, usable as citations in reports.
+- **Intel Reports are sacred**: preserve the current “Global Brief / Intelligence Report” experience and formatting; enhancements must be additive and ship behind flags.
+- **AI Analysis Modal is sacred**: preserve the current per‑article AI analysis modal UX (speed, structure, send-to-chat, copy/share, perspectives); enhancements must not break existing behavior.
+- **Existing Look & Navigation**: no big‑bang rewrite; changes ship behind flags and are progressively turned on.
+- **No client secrets**: connectors and keys live on the server only.
+- **Auditability**: every agent claim must be traceable to evidence; every tool run is logged.
+- **Accountability**: when we predict, we must later measure what happened and score ourselves.
+
+---
+
+### 1) Current Product Shape (ground truth)
+The current Figma Make direction is a **Command Center**:
+- **Terminal‑style input** (the “Examine X” hook).
+- **World map** with markers and hotspots.
+- **Modular draggable panels** + a **module catalog**.
+
+V3 keeps this shell and replaces simulation with real contracts and a professional architecture.
+
+---
+
+### 1.1) UX Contract (what the operator can do in <60 seconds)
+**Principle**: the UI must make uncertainty legible and action possible, fast.
+
+#### The operator loop (the only loop that matters)
+- **Discover**: main feed + custom feed + telegram reports surface what’s new and what matters.
+- **Examine**: a single input (“Examine X”) launches an investigation with streaming progress.
+- **Decide**: the consolidated report provides predictions + scenarios + confidence + “what would change my mind”.
+- **Monitor**: one click turns any report/topic/entity into a watch with alerts.
+
+#### UX hard rules (billion‑dollar polish, no cosplay)
+- **One global command surface**: omnibox/terminal always reachable (keyboard first).
+- **Zero dead controls**: every click maps to a server effect or is removed.
+- **Trust UI is non‑optional**: citations, source provenance, timestamps, confidence, dissent, missing data.
+- **Speed is a feature**: progressive rendering; stream partial results; cache aggressively.
+- **Progressive disclosure**: default to short, high‑signal outputs; expand only on request (or for “operator mode” users).
+- **Pin + compose**: any report/widget can be pinned into the modular dashboard.
+- **Consistent verbs** everywhere: **Examine**, **Monitor**, **Pin**, **Share**, **Export**.
+- **No fake sentiment**: current sentiment distribution is known-flawed; any sentiment shown must declare method + confidence + data sources.
+
+---
+
+### 1.2) Baseline Parity Pack (Situation Monitor‑class) + Leapfrog Pack (WatchfulEye‑class)
+**Baseline parity** is what a serious competitor already has; **leapfrog** is what makes WatchfulEye uncatchable.
+
+#### Baseline parity modules (ship early; these are table stakes)
+- **Global Activity Monitor (Map)**:
+  - Layers: **Shipping**, **Quakes**, **Cyber**, **Conflict**, **Markets** (toggleable).
+  - UX: click hotspot → mini‑dossier → “Examine this” / “Monitor this”.
+- **Livestream Desk**:
+  - TBPN (and/or other sources) embedded, with **transcripts** stored as Evidence.
+  - UX: clip‑to‑evidence + “Examine the claim in this clip”.
+- **Intel Feed (Tech / Finance / Politics)**:
+  - Unified feed with tags, dedupe, and “deep dive” action.
+- **Stocks/Crypto Pulse**:
+  - Real‑time quotes + volatility + regime hints.
+- **Prediction Markets**:
+  - Polymarket odds + drift alerts + “why odds moved” evidence.
+- **Tech layoffs tracker**:
+  - Layoffs.fyi feed + sector stress scoring.
+- **AI Race news**:
+  - arXiv + official announcements + curated “capability deltas”.
+- **“Is the Fed printer on?” Liquidity Panel**:
+  - Fed balance sheet + repo/RRP + TGA proxies + M2 trend, distilled into one signal.
+- **Country dossiers (e.g., Venezuela + Greenland)**:
+  - Region pages with “what changed since last week”, key risks, and watches.
+
+#### Leapfrog modules (what your rival cannot easily copy)
+- **Examine X → Consolidated Predictive Report** (WS4): evidence‑first, citeable, uncertainty‑explicit.
+- **AI‑generated panels/plugins in‑app** (WS8): prompt → safe ModuleSpec → preview/approve → deploy/version/share.
+- **Scenario campaigns** (WS10): COD‑style mission chains with branching outcomes and monitors.
+- **Spice must flow overlays + attractor states** (WS9): flows + geopower dynamics rendered on the map with explainability.
+- **Bias detection + counter‑view surfacing**: source diversity, narrative disagreement, and “what you’re not seeing”.
+
+#### Default Command Center layout (UX baseline)
+- **Top 60%**: Global Activity Monitor map with layer toggles + “Updated at” timestamp + refresh.
+- **Bottom 40%**: draggable modules row:
+  - Livestream Desk, Intel Feed, Markets/Crypto, Prediction Markets, Reports.
+
+---
+
+### 2) V3 Architecture (professional, scalable, safe)
+**Principle**: Versioned contracts + server‑authoritative state + isolated workstreams.
+
+#### 2.1 Planes (how the system is separated)
+- **UI Plane**: React UI (existing look), module rendering, feature flags, optimistic UX.
+- **API Plane**: versioned endpoints (`/api/v3/*`) with streaming where needed.
+- **Data Plane**: canonical store (Postgres target), plus search/indexing (FTS + embeddings).
+- **Execution Plane**: job runner/queue for investigations, monitors, ingest, scoring.
+- **Tool/Connector Plane**: typed connectors (news, markets, datasets, telegram) + governed “tool execution”.
+- **Observability Plane**: structured logs + metrics + traces per workflow.
+
+#### 2.2 Canonical entities (what we persist and render)
+- **IntelItem**: normalized item from any feed (news/telegram/market/event/dataset).
+- **Evidence**: raw payload + normalized fields + provenance + timestamps.
+- **Investigation**: user‑initiated “Examine X” mission (scope, timebox, status).
+- **AgentRun / Step / ToolCall**: replayable run details + budgets + safety tags.
+- **Report**: consolidated intelligence report with predictions + uncertainty + citations.
+- **AlertRule**: user triggers (odds drift, narrative spikes, macro prints, etc.).
+- **ModuleSpec**: declarative module definition (data source = connector reference).
+
+---
+
+### 3) Parallelization Rules (how we avoid conflicts)
+#### 3.1 One contract owner
+- Only **Workstream WS0** edits canonical schemas/contracts.
+- All other workstreams consume those interfaces; if they need changes, they submit a request to WS0.
+
+#### 3.2 File ownership boundaries
+Each workstream owns a dedicated directory slice (or clearly named files). Avoid “everyone edits App.tsx / Dashboard.tsx”.
+
+#### 3.3 Feature flags everywhere
+- Every new surface is behind a flag: `V3_*`.
+- Flags default off; we can deploy safely without breaking the current UI.
+
+#### 3.4 Merge discipline
+- Parallel work is fine, but **merge order is sequential** (WS0 → WS1 → WS2…).
+- Acceptance criteria must be met before merging.
+
+---
+
+### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
+Each workstream below is designed to be **independently implemented** with minimal overlap.
+
+#### WS0 — V3 Contracts + Safety Envelope (MUST DO FIRST)
+- **Why**: without stable interfaces, parallel work will collide.
+- **Delivers**:
+  - `/api/v3/*` endpoint map + request/response schemas.
+  - Canonical DB schema for IntelItem/Evidence/Investigation/Report/AlertRule/ModuleSpec.
+  - Event schema for structured logs (`event_type`, `workflow_id`, `latency_ms`, `user_id`, `trace_id`).
+  - Budgets for agent runs (max steps, max tool calls, max time).
+- **Owns**:
+  - `contracts/` (new) + `db/migrations/` (new) + `docs/V3_CONTRACTS.md` (new).
+- **Feature flags**:
+  - `V3_API_ENABLED`, `V3_AUDIT_LOGS`.
+- **Acceptance**:
+  - Contract docs exist, schemas compile, no production endpoints broken.
+
+#### WS1 — Main News Feed (Global Briefing) — Preserve + Professionalize
+- **Goal**: keep the existing main feed experience, but make the data plane authoritative.
+- **Delivers**:
+  - Ingestion pipeline for primary news sources (licensed + open feeds).
+  - Dedupe + clustering + ranking (“narrative velocity” optional later).
+  - `/api/v3/news/main` (list/search/filter) + `/api/v3/news/item/:id` (detail).
+- **Owns**:
+  - `news_ingest_worker.py` (or `watchfuleye/ingest/news/*` if created) + `fulltext_worker.py` + feed storage tables.
+- **Flags**:
+  - `V3_MAIN_FEED`.
+- **Acceptance**:
+  - Main feed renders from `/api/v3/news/main` with pagination + search.
+
+#### WS1.1 — Intelligence Reports v2 (Curation + Differentiation)
+- **Goal**: make reports feel **non-generic** and operationally useful (they should not read like the same template every time).
+- **Why (current weakness)**:
+  - The UI previews are mostly `content_preview`/first-line extraction; if the model prompt is stable, the outputs converge.
+  - There is no explicit **“what changed since last report”** constraint or novelty gating.
+- **Delivers**:
+  - A **Report Spec** that forces differentiation:
+    - **Delta-first**: “What changed since last cycle” (top 3 deltas with evidence IDs)
+    - **Thesis**: 1 central causal model (mechanism → transmission → second-order effects)
+    - **Predictions**: 3–5 forecast claims with probabilities + horizons + “what would change my mind”
+    - **Actionability**: concrete monitors + triggers + hedges (or “no trade” explicitly)
+    - **Evidence**: citations required for each major claim; missing-data section mandatory
+  - A **Curation Engine** for geopolitical intel:
+    - Cluster articles into narratives (entity + embedding + time)
+    - Select a diversified set (regions/sectors/sources) rather than “top N by recency”
+    - Anti-dup: block near-identical reports using embedding similarity against prior reports
+  - A **Quality Gate**:
+    - minimum evidence density
+    - minimum novelty vs previous N reports
+    - minimum actionable monitors per report (or explicit reason for none)
+- **Owns**:
+  - `watchfuleye/briefs/*` + report prompt/spec + curation logic
+- **Flags**:
+  - `V3_REPORTS_V2`
+- **Acceptance**:
+  - Two consecutive reports must differ meaningfully (measurable novelty) and each must include deltas + forecast claims + monitors.
+  - The existing “Global Brief” section layout remains available as the default view (no regressions); new views are additive.
+
+#### WS1.2 — AI Analysis Modal v2 (Make it a king, no regressions)
+- **Goal**: keep the current AI analysis modal experience, but upgrade depth, citations, and usefulness.
+- **Delivers**:
+  - Preserve current modal behaviors:
+    - fast open, streaming analysis, structured sections, “send to chat”, copy/export
+    - political perspectives panel (kept, improved)
+  - Additions (behind flags):
+    - citations from RAG evidence (InlineCitationCard/SourcesHoverChip)
+    - “delta since last analysis” for the same topic/entity
+    - explicit confidence + dissent + “what would change my mind”
+- **Flags**:
+  - `V3_ANALYSIS_MODAL_V2`
+- **Acceptance**:
+  - Users who love the current modal should feel it’s the same modal—just sharper and more trustworthy.
+
+#### WS2 — Custom News Feed (My Wire) — User Personalization
+- **Goal**: user topics/watchlists/saved searches, backed by server state.
+- **Delivers**:
+  - Topic model + saved searches.
+  - `/api/v3/news/custom` and `/api/v3/topics/*`.
+  - Optional: per-topic scoring + alert hooks.
+- **Owns**:
+  - `watchfuleye/custom_feeds/*` (new) + DB tables for topics and subscriptions.
+- **Flags**:
+  - `V3_CUSTOM_FEED`.
+- **Acceptance**:
+  - User can create a topic and see a stable custom feed; survives refresh/device change.
+
+#### WS3 — Telegram Intel Reports (First‑Class)
+- **Goal**: Telegram remains a first‑class intel stream, not an afterthought.
+- **Delivers**:
+  - Telegram ingest → `IntelItem(type=telegram)` + `Evidence`.
+  - `/api/v3/telegram/reports` (digests) + `/api/v3/telegram/messages` (raw).
+  - Citations: reports can cite telegram evidence IDs.
+- **Owns**:
+  - `main.py` / bot pipeline files + new `watchfuleye/ingest/telegram/*`.
+- **Flags**:
+  - `V3_TELEGRAM_FEED`.
+- **Acceptance**:
+  - Telegram reports show in UI; raw message is retrievable and citeable.
+
+#### WS3.1 — Two‑Way Telegram Agent (Conversational RAG → Investigations → Monitors)
+- **Goal**: Telegram becomes an operator console: ask naturally, get fast citeable answers, and one‑tap into the full dossier on the site.
+- **Important constraint**: We do **not** ship dark patterns or covert manipulation. “Hooks” must be **value‑driven and transparent** (quick answer here; deeper work on the site).
+- **Delivers**:
+  - **Inbound** (DMs / allowlisted group chats):
+    - Commands: `/examine <topic>`, `/monitor <topic>`, `/brief`, `/sources`, `/status`
+    - Natural language fallback: “what’s up with X?” → treated as `/examine X`
+  - **Agent modes**:
+    - **Fast RAG reply** (seconds): embeddings + FTS retrieval → 5‑bullet answer + citations
+    - **Escalation** (agentic): “go deeper” → create `Investigation` (WS4) and stream updates back to Telegram
+    - **Monitoring**: “watch this” → create alert rules (WS6) and confirm in Telegram
+  - **Don’t overload the user**:
+    - Default replies are concise (5 bullets max + citations).
+    - Extra detail is opt‑in via buttons (“Show more”, “Sources”, “Red‑team”) or explicit prompts.
+    - Optional per-user verbosity setting (brief vs operator mode).
+  - **Deep links (ethical traffic driver)**:
+    - Every Telegram answer includes a single explicit link: **“Open full dossier on dashboard”**
+    - Link format: `/dashboard?examine=<query>&origin=telegram` (or equivalent) to pre‑load context
+  - **Operator‑grade presentation hooks (transparent, not manipulative)**:
+    - “Delta‑first”: what changed since last cycle for this topic
+    - “Confidence + dissent”: show confidence and best counter‑case
+    - “Next actions”: one‑tap buttons (Open dossier / Monitor / Sources / Red‑team)
+  - **Security + abuse controls**:
+    - Allowlist chat IDs / user tokens; rate limits; audit logs for every command
+    - Prompt‑injection defense: strict tool gating; evidence‑only answers when in RAG mode
+    - Cost/latency budgets per request; graceful fallback to “fast reply only”
+- **Owns**:
+  - `watchfuleye/telegram_agent/*` (new) + webhook/poller integration
+  - Minimal UI deep-link handler in dashboard (`origin=telegram`)
+- **Flags**:
+  - `V3_TELEGRAM_AGENT`, `V3_TELEGRAM_INBOUND`, `V3_TELEGRAM_DEEPLINKS`
+- **Acceptance**:
+  - A user can DM: “Examine Venezuela” → receive a citeable brief in <10s.
+  - One tap opens a pre‑filled dossier on the site.
+  - “Monitor this” creates a real alert rule and confirms it.
+
+#### WS4 — Investigations (“Examine X”) + Consolidated Report Output (Core Loop)
+- **Goal**: the terminal input triggers a real mission with evidence + predictions.
+- **Delivers**:
+  - `/api/v3/investigations` create/run/status + `/api/v3/reports/:id`.
+  - Agent planner → evidence pack → synthesis → red‑team check → final report.
+  - Streaming updates for progress (SSE/WebSocket).
+- **Owns**:
+  - `watchfuleye/investigations/*` + job runner integration.
+- **Flags**:
+  - `V3_INVESTIGATIONS`, `V3_REPORTS`.
+- **Acceptance**:
+  - “Examine X” produces a report with citations and explicit uncertainty.
+
+#### WS5 — Connectors Registry (Expanded Data Sources, Governed)
+- **Goal**: make “scan across all sources” precise, safe, and composable.
+- **Delivers**:
+  - Connector registry with typed capabilities, rate limits, caching, compliance tags.
+  - Connector tiers (to keep scope sharp and quality high):
+    - **Tier A (ship first: low‑risk, high‑leverage)**:
+      - **Markets**: Yahoo Finance / Alpha Vantage (plus a fallback source if one fails)
+      - **Crypto**: CoinGecko / CoinMarketCap
+      - **Prediction markets**: Polymarket (and optionally Kalshi later)
+      - **Macro**: FRED (plus key central‑bank calendars/announcements as feeds)
+      - **Liquidity (“Fed printer”)**: Fed H.4.1 balance sheet, NY Fed repo/RRP, TGA proxies (via FRED where possible)
+      - **Disasters**: USGS (plus GDACS/NOAA later if needed)
+      - **Conflict/events**: ACLED + UN public reporting (optionally UCDP later)
+      - **Supply chain/resources**: EIA + WTO (optionally UN Comtrade later)
+      - **Telegram**: handled in WS3, but exposed via the same connector interface for investigations
+      - **Open global events/news index (fallback + geo‑tagging)**: GDELT (or equivalent open event graph)
+      - **Sanctions/regulatory (critical for “Iran sanctions”‑class queries)**: OFAC SDN + EU/UK/UN sanctions lists
+      - **Corporate filings/official docs**: SEC EDGAR + press releases / official statements feeds
+      - **Cyber advisories (safe intel feed)**: CISA alerts/advisories + vendor security advisories (as Evidence)
+      - **Tech layoffs**: layoffs.fyi (optional but high signal for sector stress)
+    - **Tier B (non‑standard signals: big upside, medium complexity)**:
+      - **Social/narrative signals**: X/Reddit/YouTube (via compliant APIs/feeds), with bias + brigading defenses
+      - **Social sentiment ingestion tool (optional)**: Phantombuster (job-driven scraping/collection) → treated as a governed connector with strict terms-of-service and rate limits
+      - **Trends**: Wikipedia pageviews + Google Trends‑style interest proxies
+      - **Livestream intel**: TBPN (store metadata + transcripts as Evidence)
+      - **Geo mobility**: maritime AIS + flight ADS‑B (where licensed/allowed)
+      - **Satellite/public earth observation**: Sentinel/NASA feeds for verification overlays
+      - **Weather/climate disruption**: NOAA storms + NASA FIRMS (wildfires) for supply chain and energy shock overlays
+      - **Shipping/port stress**: container indices / port congestion / freight rates (for chokepoint monitoring)
+      - **Policy/legislation trackers**: US/EU/UK public bill trackers + regulator updates (as feeds)
+    - **Tier C (gated / high‑risk / enterprise)**:
+      - **Asset exposure intel**: Censys/Shodan → **authorized targets only**
+      - **Threat intel + vuln feeds**: CISA KEV / NVD CVE (safe), but any “active testing” is gated/off by default
+      - **PII/recon tools**: **off by default**; only via explicit governance if ever added
+  - High‑risk classes are gated by default:
+    - “Asset exposure / scanning” (Censys/Shodan) → **authorized targets only**
+    - PII/recon tools → **off by default**
+- **Owns**:
+  - `watchfuleye/connectors/*` + caching layer.
+- **Flags**:
+  - `V3_CONNECTORS`, `V3_HIGH_RISK_CONNECTORS`.
+- **Acceptance**:
+  - Investigation planner can call connectors deterministically based on query intent.
+
+#### WS6 — Alerts + Monitoring (Retention Engine)
+- **Goal**: turn investigations into ongoing monitoring; automate notifications.
+- **Delivers**:
+  - Alert rules engine + scheduler.
+  - Triggers: odds drift, narrative spike, macro print, earthquake threshold, conflict escalation.
+  - Notification channels: in‑app + Telegram + email (if configured).
+- **Owns**:
+  - `watchfuleye/alerts/*` + worker/scheduler.
+- **Flags**:
+  - `V3_ALERTS`.
+- **Acceptance**:
+  - A user sets an alert; system fires it with evidence and a short explanation.
+
+#### WS6.1 — Forecast Accountability (Track predictions vs outcomes)
+- **Goal**: measure what we produce against what actually happens (no self-delusion).
+- **Delivers**:
+  - Persist every forecast from investigations/reports as a `Forecast` object:
+    - claim, probability, horizon, entities, assumptions, evidence_ids, created_at
+  - Outcome tracking jobs:
+    - market outcomes (price moves), event outcomes (e.g., sanctions added), odds outcomes (Polymarket resolution)
+  - Scoring + calibration:
+    - Brier score, calibration curves, hit rate by horizon, “confidence vs accuracy”
+  - UX surfaces:
+    - “Track record” panel + per-report “how past forecasts performed”
+- **Owns**:
+  - `watchfuleye/forecasting/*` (new) + DB tables (in WS0 schema)
+- **Flags**:
+  - `V3_FORECAST_TRACKING`
+- **Acceptance**:
+  - Any forecast shown to users can be found later in a track record view with outcome status.
+
+#### WS7 — Modular Panels v2 (ModuleSpec + Server‑Backed, No Client Secrets)
+- **Goal**: keep the draggable dashboard UX, but make modules real and safe.
+- **Delivers**:
+  - `ModuleSpec` schema + server persistence.
+  - Module catalog wired to server connectors (no raw endpoint/headers in client).
+  - User layouts saved server‑side.
+  - Baseline Parity Pack modules implemented as first‑class ModuleSpecs (map, livestream, intel feed, markets, polymarket, layoffs, AI race, liquidity, dossiers).
+- **Owns**:
+  - `frontend/src/modules/*` (new) + `/api/v3/modules/*`.
+- **Flags**:
+  - `V3_MODULES`.
+- **Acceptance**:
+  - Add/remove modules with no dead controls; layout persists across sessions.
+
+#### WS8 — AI Panel Builder + Panel Store (Your Differentiator)
+- **Goal**: “Create a panel for Iran sanctions” → generated module spec + preview + deploy.
+- **Delivers**:
+  - Prompt → ModuleSpec proposal → preview → approve → deploy → versioning.
+  - Panel Store: share modules; moderation rules; compatibility checks.
+- **Owns**:
+  - `watchfuleye/panels/*` + `frontend/src/panel-store/*` (new).
+- **Flags**:
+  - `V3_PANEL_BUILDER`, `V3_PANEL_STORE`.
+- **Acceptance**:
+  - Generated panel uses connectors safely and renders in dashboard.
+
+#### WS9 — Map Overlays (Spice Flows + Attractor States + Search)
+- **Goal**: map becomes an intelligence canvas (layers like a weather app).
+- **Delivers**:
+  - Map search + clickable event clusters.
+  - “Spice must flow” overlays (resource/trade/influence flows).
+  - “Attractor state” geopower visualization (graph‑derived metrics).
+  - Country/region dossiers surfaced from map context (e.g., Venezuela, Greenland) with “Examine” + “Monitor”.
+- **Owns**:
+  - `watchfuleye/geo/*` + `frontend/src/map/*`.
+- **Flags**:
+  - `V3_MAP_LAYERS`.
+- **Acceptance**:
+  - Layers can be toggled, are explainable, and cite their sources.
+
+#### WS10 — Campaign Generator (COD‑style missions)
+- **Goal**: investigations become scenario chains with branching outcomes.
+- **Delivers**:
+  - Scenario templates + simulation hooks + report outputs.
+  - Replay + “what would change my mind?” conditions.
+- **Flags**:
+  - `V3_CAMPAIGNS`.
+
+#### WS11 — Multi‑Display / Large Screen (Operational Setup)
+- **Goal**: command center works on TVs and multi‑monitor walls.
+- **Delivers**:
+  - Responsive layout modes + synchronized views + “presentation lock”.
+- **Flags**:
+  - `V3_MULTIDISPLAY`.
+
+#### WS12 — Optional Immersion (VR/AR)
+- **Goal**: only after everything above is addictive‑by‑necessity.
+- **Flags**:
+  - `V3_IMMERSIVE`.
+
+---
+
+### 5) “Don’t Kill the Site” Rollout Strategy
+- **Dual‑stack APIs**: keep existing endpoints; introduce `/api/v3/*` alongside.
+- **Feature flags**: UI flips module‑by‑module, not page‑by‑page.
+- **Progressive replacement**:
+  - First replace data sources under existing UI (feeds, telegram).
+  - Then enable investigations and reports behind flags.
+  - Then migrate modules and custom builder away from client endpoints.
+
+---
+
+### 6) Quality Gates (when a workstream is “done”)
+- **E2E happy path** for the feature (including search/indexing where relevant).
+- **Failure modes**: timeouts, missing sources, rate limits, partial results.
+- **Security**: no secrets in client; gated high‑risk connectors; audit logs.
+- **Observability**: structured events + latency; ability to replay investigations.
+- **Forecast evaluation** (where applicable): predictions must be stored and scored later (Brier/calibration) before we claim “accuracy”.
+
+---
+
+### 7) Sentiment (Fix the current flawed approach)
+Current sentiment distribution is **known to be unreliable** and should not be trusted as “market truth”.
+
+V3 approach:
+- **Separate two concepts**:
+  - **Article tone** (how the writing sounds)
+  - **Market impact sentiment** (bullish/bearish implications)
+- **Use multiple signals**:
+  - news-based impact scoring (source trust + recency + evidence weight)
+  - market data confirmation (price/vol/regime)
+  - **optional** social sentiment (governed connectors; anti-brigading; confidence gating)
+- **Always show confidence + method** (and allow the user to toggle the feature off).
+
+---
+
+### 8) Report Quality (how we stop “generic” output)
+**Definition**: A report is “powerful” only if it changes an operator’s decision-making.
+
+Quality constraints we enforce:
+- **Delta requirement**: must state what changed since last cycle (and cite it).
+- **Forecast requirement**: at least 3 explicit probabilistic claims (or explain why forecasting is inappropriate).
+- **Evidence requirement**: every major claim must cite evidence IDs (no free-floating assertions).
+- **Dissent requirement**: at least one counter-case / disconfirming evidence.
+- **Uniqueness requirement**: embedding similarity against prior reports must be below a threshold, or the report is rejected/regenerated.
+
+### Rigid Self‑Check
+- **Why this?** It’s the minimum structure that lets multiple agents build in parallel without conflict while preserving the current UI.
+- **What does it change?** Ad hoc feature building → contract‑driven, flagged rollout with isolated ownership.
+- **Humanity Furtherance**: **+1** — safer, clearer intelligence synthesis at scale.
+- **First‑Principles Trace (load-bearing)**:
+  - Stable contracts prevent collision.
+  - Server authority prevents trust collapse.
+  - Evidence + uncertainty prevent “fake intelligence”.
+- **Next Bold Variant**: Map selection auto‑spawns an “Examine region” investigation plan (connectors + hypotheses) with one click.
+
+

@@ -1,0 +1,19 @@
+# Default owners (tighten later as the team grows)
+* @olivertmorley
+
+# Core plan docs
+WATCHFULEYE_V3_MASTER_PLAN.md @olivertmorley
+
+# Backend core
+web_app.py @olivertmorley
+database.py @olivertmorley
+
+# Frontend core
+frontend/src/Dashboard.tsx @olivertmorley
+frontend/src/App.tsx @olivertmorley
+
+# V3 modules (future)
+watchfuleye/ @olivertmorley
+frontend/src/modules/ @olivertmorley
+
+

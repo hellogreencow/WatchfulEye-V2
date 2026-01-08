@@ -1,0 +1,21 @@
+## WatchfulEye V3 (WS0) — Build Discipline Rules
+
+### Purpose
+Prevent regressions and parallel-work collisions while we upgrade WatchfulEye into V3.
+
+### Non-negotiables
+- Preserve `/dashboard` behavior and the existing look/feel unless a `V3_*` flag is ON.
+- Do not treat Chimera as a foundation. It is legacy/experimental unless explicitly revived.
+- No client-side secrets. All connectors/tools run server-side.
+- Prefer progressive disclosure: default outputs are concise; only expand when the user asks or is in “operator mode”.
+
+### Workstream discipline
+- WS0 owns schemas/contracts. Other workstreams do not edit them directly.
+- One PR = one workstream. Declare file ownership boundaries.
+- Parallel development is allowed; merges are sequential (WS0 → WS1/2/3/5/6/7 → WS4 → WS8/9/10+).
+
+### Quality gates (required)
+- CI must pass: backend ruff+mypy+tests, frontend lint+typecheck+tests+build.
+- Any prediction feature must store forecasts and support later outcome scoring (Brier/calibration).
+- Any sentiment shown must declare method+confidence and must be clearly “tone” vs “market impact”.
+

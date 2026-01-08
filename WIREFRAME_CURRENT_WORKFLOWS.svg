@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="700" viewBox="0 0 2200 700" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;">
+  <defs>
+    <style>
+      .title { font-size: 28px; font-weight: 700; fill: #111; }
+      .subtitle { font-size: 14px; fill: #333; }
+      .laneTitle { font-size: 16px; font-weight: 700; fill: #111; }
+      .box { fill: #fff; stroke: #111; stroke-width: 2; }
+      .boxHeader { font-size: 15px; font-weight: 700; fill: #111; }
+      .boxText { font-size: 13px; fill: #111; }
+      .muted { fill: #555; }
+      .arrow { stroke: #111; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 8 6; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#111"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="2200" height="700" fill="#fafafa"/>
+
+  <text x="40" y="55" class="title">WatchfulEye — CURRENT (v1) Architecture</text>
+  <text x="40" y="80" class="subtitle">Hybrid Data Infrastructure + Real-time AI Analysis + Background Ingestion Pipeline</text>
+
+  <!-- Lane titles -->
+  <text x="40" y="130" class="laneTitle">Clients</text>
+  <text x="410" y="130" class="laneTitle">Edge</text>
+  <text x="790" y="130" class="laneTitle">Backend Services</text>
+  <text x="1230" y="130" class="laneTitle">Data Infrastructure</text>
+  <text x="1600" y="130" class="laneTitle">Background Processes</text>
+  <text x="1920" y="130" class="laneTitle">External Ecosystem</text>
+
+  <!-- Clients -->
+  <rect x="40" y="160" width="320" height="110" rx="12" class="box"/>
+  <text x="56" y="190" class="boxHeader">Web Interface</text>
+  <text x="56" y="212" class="boxText">Auth • Feed • Search</text>
+  <text x="56" y="232" class="boxText">AI Chat • Intelligence Reports</text>
+  <text x="56" y="252" class="boxText muted">React SPA</text>
+
+  <rect x="40" y="290" width="320" height="90" rx="12" class="box"/>
+  <text x="56" y="320" class="boxHeader">Communication</text>
+  <text x="56" y="342" class="boxText">Telegram Channel/DM</text>
+  <text x="56" y="362" class="boxText muted">Automated Briefings</text>
+
+  <!-- Edge -->
+  <rect x="410" y="160" width="340" height="110" rx="12" class="box"/>
+  <text x="426" y="190" class="boxHeader">Routing Layer</text>
+  <text x="426" y="212" class="boxText">Static Asset Delivery</text>
+  <text x="426" y="232" class="boxText">API Request Proxying</text>
+  <text x="426" y="252" class="boxText muted">TLS Termination</text>
+
+  <!-- Backend APIs -->
+  <rect x="790" y="160" width="390" height="150" rx="12" class="box"/>
+  <text x="806" y="190" class="boxHeader">Primary Intelligence API</text>
+  <text x="806" y="212" class="boxText">User Sessions • Article Retrieval</text>
+  <text x="806" y="232" class="boxText">RAG Search • Multi-Perspective Analysis</text>
+  <text x="806" y="252" class="boxText">Scenario Modeling (Baseline)</text>
+  <text x="806" y="272" class="boxText muted">Python Flask / uWSGI</text>
+
+  <rect x="790" y="330" width="390" height="90" rx="12" class="box"/>
+  <text x="806" y="360" class="boxHeader">AI Analysis Service</text>
+  <text x="806" y="382" class="boxText">Real-time LLM Orchestration</text>
+  <text x="806" y="402" class="boxText muted">Streaming SSE Responses</text>
+
+  <!-- Data stores -->
+  <rect x="1230" y="160" width="330" height="150" rx="12" class="box"/>
+  <text x="1246" y="190" class="boxHeader">State Engine</text>
+  <text x="1246" y="212" class="boxText">User Auth • Profile Data</text>
+  <text x="1246" y="232" class="boxText">Chat History • Search Index</text>
+  <text x="1246" y="252" class="boxText">Relational Metadata</text>
+  <text x="1246" y="272" class="boxText muted">Structured Storage</text>
+
+  <rect x="1230" y="330" width="330" height="190" rx="12" class="box"/>
+  <text x="1246" y="360" class="boxHeader">Intelligence Store</text>
+  <text x="1246" y="382" class="boxText">Vector Embeddings</text>
+  <text x="1246" y="402" class="boxText">Full-text Article Repository</text>
+  <text x="1246" y="422" class="boxText">Topic &amp; Term Trends</text>
+  <text x="1246" y="442" class="boxText">Global Brief Snapshots</text>
+  <text x="1246" y="462" class="boxText muted">Vector + Relational + FTS</text>
+
+  <!-- Jobs -->
+  <rect x="1600" y="160" width="280" height="180" rx="12" class="box"/>
+  <text x="1616" y="190" class="boxHeader">Data Pipeline</text>
+  <text x="1616" y="212" class="boxText">Source Ingestion • Deduplication</text>
+  <text x="1616" y="232" class="boxText">Trust Scoring • Quality Filter</text>
+  <text x="1616" y="254" class="boxText">Content Extraction • Trends</text>
+  <text x="1616" y="274" class="boxText">Messaging Bot (Schedule)</text>
+
+  <!-- External -->
+  <rect x="1920" y="160" width="240" height="200" rx="12" class="box"/>
+  <text x="1936" y="190" class="boxHeader">Third-Party Services</text>
+  <text x="1936" y="212" class="boxText">News Sources (RSS/Web)</text>
+  <text x="1936" y="232" class="boxText">LLM Inference</text>
+  <text x="1936" y="252" class="boxText">Embedding Models</text>
+  <text x="1936" y="272" class="boxText">Telegram Gateway</text>
+  <text x="1936" y="294" class="boxText muted">External APIs</text>
+
+  <!-- Primary arrows -->
+  <path d="M360 215 L410 215" class="arrow"/>
+  <text x="372" y="205" class="boxText muted">HTTPS</text>
+
+  <path d="M750 215 L790 215" class="arrow"/>
+  <text x="760" y="205" class="boxText muted">API</text>
+
+  <path d="M1180 220 L1230 220" class="arrow"/>
+  <text x="1186" y="210" class="boxText muted">State</text>
+
+  <path d="M1180 280 L1230 420" class="arrow"/>
+  <text x="1186" y="330" class="boxText muted">Intel</text>
+
+  <path d="M1600 230 L1560 420" class="arrow"/>
+  <text x="1490" y="350" class="boxText muted">Write</text>
+
+  <path d="M1180 240 L1920 240" class="arrow"/>
+  <text x="1500" y="230" class="boxText muted">AI Compute</text>
+
+  <path d="M1920 210 L1880 210" class="arrow"/>
+  <text x="1890" y="200" class="boxText muted">Sources</text>
+
+  <path d="M1880 290 L1920 290" class="arrow dashed"/>
+  <text x="1890" y="280" class="boxText muted">Broadcast</text>
+</svg>

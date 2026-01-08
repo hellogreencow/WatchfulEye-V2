@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="700" viewBox="0 0 2200 700" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace;">
+  <defs>
+    <style>
+      .title { font-size: 28px; font-weight: 700; fill: #111; }
+      .subtitle { font-size: 14px; fill: #333; }
+      .laneTitle { font-size: 16px; font-weight: 700; fill: #111; }
+      .box { fill: #fff; stroke: #111; stroke-width: 2; }
+      .boxHeader { font-size: 15px; font-weight: 700; fill: #111; }
+      .boxText { font-size: 13px; fill: #111; }
+      .muted { fill: #555; }
+      .arrow { stroke: #111; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 8 6; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#111"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="2200" height="700" fill="#fafafa"/>
+
+  <text x="40" y="55" class="title">WatchfulEye — V2 Target Architecture</text>
+  <text x="40" y="80" class="subtitle">Unified Application Shell + Agentic Workflow Engine + Centralized Intelligence Hub + External Integrations</text>
+
+  <!-- Lane titles -->
+  <text x="40" y="130" class="laneTitle">Clients</text>
+  <text x="410" y="130" class="laneTitle">Edge</text>
+  <text x="790" y="130" class="laneTitle">API &amp; Orchestration</text>
+  <text x="1230" y="130" class="laneTitle">Unified Intelligence Hub</text>
+  <text x="1600" y="130" class="laneTitle">Async Task Engine</text>
+  <text x="1920" y="130" class="laneTitle">External Ecosystem</text>
+
+  <!-- Clients -->
+  <rect x="40" y="160" width="320" height="120" rx="12" class="box"/>
+  <text x="56" y="190" class="boxHeader">GlobalShell Interface</text>
+  <text x="56" y="212" class="boxText">Intel Feed • War Room • Terminal</text>
+  <text x="56" y="232" class="boxText">Portfolio • Reports • Daily Five</text>
+  <text x="56" y="252" class="boxText muted">React V2 Redesign</text>
+
+  <rect x="40" y="300" width="320" height="90" rx="12" class="box"/>
+  <text x="56" y="330" class="boxHeader">Communication</text>
+  <text x="56" y="352" class="boxText">Briefings • Agent Alerts</text>
+  <text x="56" y="372" class="boxText muted">Telegram Bot Integration</text>
+
+  <!-- Edge -->
+  <rect x="410" y="160" width="340" height="110" rx="12" class="box"/>
+  <text x="426" y="190" class="boxHeader">Routing &amp; Security</text>
+  <text x="426" y="212" class="boxText">Application Server Proxy</text>
+  <text x="426" y="232" class="boxText">Stream Routing (SSE/WS)</text>
+  <text x="426" y="252" class="boxText muted">Centralized Entry Point</text>
+
+  <!-- Backend APIs -->
+  <rect x="790" y="160" width="390" height="190" rx="12" class="box"/>
+  <text x="806" y="190" class="boxHeader">Application Services (v2)</text>
+  <text x="806" y="212" class="boxText">Unified API Gateway (Auth/Feed/Chat)</text>
+  <text x="806" y="232" class="boxText">Agentic Orchestrator (Plan/Execute/Reflect)</text>
+  <text x="806" y="252" class="boxText">Portfolio &amp; Analytics Engine</text>
+  <text x="806" y="272" class="boxText">Ledger &amp; Entitlement Management</text>
+  <text x="806" y="292" class="boxText muted">Async Workflows + Real-time Streams</text>
+
+  <!-- Data Stores -->
+  <rect x="1230" y="160" width="330" height="170" rx="12" class="box"/>
+  <text x="1246" y="190" class="boxHeader">Centralized Data Hub</text>
+  <text x="1246" y="212" class="boxText">Relational Articles • Vector Embeddings</text>
+  <text x="1246" y="232" class="boxText">Agent Logs • User State • Portfolios</text>
+  <text x="1246" y="252" class="boxText">Financial Metrics • Scoring Cache</text>
+  <text x="1246" y="272" class="boxText muted">Converged Postgres Infrastructure</text>
+
+  <!-- Jobs -->
+  <rect x="1600" y="160" width="280" height="200" rx="12" class="box"/>
+  <text x="1616" y="190" class="boxHeader">Execution Layer</text>
+  <text x="1616" y="212" class="boxText">Ingest &amp; Enrichment Pipeline</text>
+  <text x="1616" y="232" class="boxText">Multi-step Agent Workers</text>
+  <text x="1616" y="252" class="boxText">Metric Computation Service</text>
+  <text x="1616" y="272" class="boxText">Portfolio Exposure Refresh</text>
+  <text x="1616" y="292" class="boxText">Payment Webhook Processors</text>
+
+  <!-- External -->
+  <rect x="1920" y="160" width="240" height="240" rx="12" class="box"/>
+  <text x="1936" y="190" class="boxHeader">External Services</text>
+  <text x="1936" y="212" class="boxText">News Ecosystem</text>
+  <text x="1936" y="232" class="boxText">Advanced LLM Models</text>
+  <text x="1936" y="252" class="boxText">Semantic Embeddings</text>
+  <text x="1936" y="272" class="boxText">Composio Tool Hub</text>
+  <text x="1936" y="292" class="boxText">Stripe Payments</text>
+  <text x="1936" y="312" class="boxText">Telegram Notify API</text>
+
+  <!-- Primary arrows -->
+  <path d="M360 220 L410 220" class="arrow"/>
+  <text x="372" y="210" class="boxText muted">HTTPS</text>
+
+  <path d="M750 220 L790 220" class="arrow"/>
+  <text x="760" y="210" class="boxText muted">API</text>
+
+  <path d="M1180 235 L1230 235" class="arrow"/>
+  <text x="1186" y="225" class="boxText muted">CRUD</text>
+
+  <path d="M1180 250 L1920 250" class="arrow"/>
+  <text x="1500" y="240" class="boxText muted">Third-Party Calls</text>
+
+  <path d="M1920 210 L1880 210" class="arrow"/>
+  <text x="1890" y="200" class="boxText muted">News</text>
+
+  <path d="M1600 240 L1560 235" class="arrow"/>
+  <text x="1490" y="230" class="boxText muted">Write</text>
+
+  <path d="M1880 290 L1920 290" class="arrow dashed"/>
+  <text x="1890" y="280" class="boxText muted">Alerts</text>
+</svg>
