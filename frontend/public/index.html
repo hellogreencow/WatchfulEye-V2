@@ -94,9 +94,9 @@
     <script>
       (function() {
         try {
+          // Prioritize dark by default unless user explicitly chose light
           var storedTheme = localStorage.getItem('theme');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var shouldUseDark = storedTheme === 'dark' || (!storedTheme && prefersDark);
+          var shouldUseDark = storedTheme !== 'light';
           var root = document.documentElement;
           if (shouldUseDark) {
             root.classList.add('dark');

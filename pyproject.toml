@@ -1,0 +1,31 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [
+  "venv",
+  "frontend",
+  "docs",
+  "pg_data",
+  "__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = [
+  "E501", # handled by formatter / line-length pragmatically
+  "F401", # legacy codebase has many unused imports; tighten gradually per-workstream
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = false
+ignore_missing_imports = true
+no_implicit_optional = false
+check_untyped_defs = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+files = ["watchfuleye"]
+
+

@@ -46,6 +46,12 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
+    --input-background: 217.2 32.6% 17.5%;
+  }
+  
+  /* Light mode input background */
+  :root {
+    --input-background: 0 0% 100%;
   }
 }
 
@@ -142,4 +148,24 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* Force dark gray text color for TerminalInput */
+input[data-terminal-input="true"] {
+  color: #1f2937 !important;
+  caret-color: #1f2937 !important;
+  -webkit-text-fill-color: #1f2937 !important;
+}
+input[data-terminal-input="true"]:not(:placeholder-shown) {
+  color: #1f2937 !important;
+  caret-color: #1f2937 !important;
+  -webkit-text-fill-color: #1f2937 !important;
+}
+input[data-terminal-input="true"]:-webkit-autofill,
+input[data-terminal-input="true"]:-webkit-autofill:hover,
+input[data-terminal-input="true"]:-webkit-autofill:focus,
+input[data-terminal-input="true"]:-webkit-autofill:active {
+  -webkit-text-fill-color: #1f2937 !important;
+  caret-color: #1f2937 !important;
+  transition: background-color 9999s ease-out 0s;
 }

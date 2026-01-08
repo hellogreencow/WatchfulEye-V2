@@ -11,16 +11,16 @@ import '@testing-library/jest-dom';
 // We mock axios globally for unit tests to keep tests deterministic and avoid
 // bundler/jest config churn.
 jest.mock('axios', () => {
-  const mockAxios = {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    patch: jest.fn(),
-    delete: jest.fn(),
-    create: jest.fn(() => mockAxios),
-    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
-  };
+  // Avoid self-referential inference issues in TS by constructing in two phases.
+  const mockAxios: any = {};
+  mockAxios.get = jest.fn();
+  mockAxios.post = jest.fn();
+  mockAxios.put = jest.fn();
+  mockAxios.patch = jest.fn();
+  mockAxios.delete = jest.fn();
+  mockAxios.interceptors = { request: { use: jest.fn() }, response: { use: jest.fn() } };
+  mockAxios.defaults = { headers: { common: {} as Record<string, string> } };
+  mockAxios.create = jest.fn(() => mockAxios);
   return {
     __esModule: true,
     default: mockAxios,

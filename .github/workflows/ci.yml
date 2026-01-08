@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["master"]
+
+jobs:
+  backend:
+    name: Backend (lint/typecheck/tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: watchfuleye
+          POSTGRES_USER: watchful
+          POSTGRES_PASSWORD: watchfulpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U watchful -d watchfuleye"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      PG_DSN: dbname=watchfuleye user=watchful password=watchfulpass host=localhost port=5432
+      DISABLE_SEMANTIC: "true"
+      SUPABASE_URL: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Ruff (format + lint)
+        run: |
+          ruff check watchfuleye tests
+
+      - name: Mypy (scoped)
+        run: |
+          mypy watchfuleye
+
+      - name: Unit tests
+        run: |
+          python -m unittest discover -s tests -p "test_*.py"
+
+  frontend:
+    name: Frontend (lint/typecheck/tests/build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Tests
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm test -- --watchAll=false
+
+      - name: Build
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm run build
+
+

@@ -62,7 +62,7 @@ class NewsAPIIngestor(BaseIngestor):
 
     def fetch(self, *, limit: int = 100, topic: Optional[str] = None, query: Optional[str] = None, days: int = 3) -> List[ArticleCandidate]:
         q = query or topic or "geopolitics OR markets"
-        params = {
+        params: Dict[str, str | int] = {
             "q": q,
             "language": "en",
             "sortBy": "publishedAt",
@@ -150,7 +150,7 @@ class GDELTIngestor(BaseIngestor):
 
     def fetch(self, *, limit: int = 100, topic: Optional[str] = None, query: Optional[str] = None) -> List[ArticleCandidate]:
         q = query or topic or "geopolitics OR markets"
-        params = {
+        params: Dict[str, str | int] = {
             "query": q,
             "mode": "ArtList",
             "format": "json",

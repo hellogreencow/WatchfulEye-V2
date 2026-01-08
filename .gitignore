@@ -1,3 +1,7 @@
+*.db-wal
+*.db-shm
+news_bot.db-wal
+news_bot.db-shm
 # Python
 __pycache__/
 *.py[cod]
@@ -93,6 +97,7 @@ coverage.xml
 
 # virtualenv
 .venv
+.venv*/
 venv/
 ENV/
 

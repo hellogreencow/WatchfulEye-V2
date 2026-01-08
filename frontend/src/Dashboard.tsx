@@ -152,7 +152,7 @@ interface AuthContextType {
 
 const AuthContext = React.createContext<AuthContextType | null>(null);
 
-function useAuth() {
+export function useAuth() {
   const context = React.useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
@@ -2456,7 +2456,7 @@ function AnalysisReportModal({ analysis, isOpen, onClose }: {
 }
 
 // Auth Provider Component
-function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2663,6 +2663,29 @@ function MinimalistDashboard({
   const chat = useChatStream({ apiBaseUrl: API_BASE_URL });
   const auth = useAuth();
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+
+  // If the user clicked "AI Deep Analysis" on a public Briefings card, we stash the article in localStorage,
+  // then route them to /login (or /dashboard if already authed). Once here and authenticated, auto-open analysis.
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    const key = 'we_pending_ai_article_v1';
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as Article;
+      if (parsed?.title) {
+        setSelectedArticle(parsed);
+        setShowAnalysis(true);
+      }
+    } catch {
+      // ignore
+    } finally {
+      localStorage.removeItem(key);
+    }
+  }, []);
 
   // Fetch conversation history
   const fetchConversationHistory = async () => {
@@ -5206,9 +5229,18 @@ function WatchfulEyeDashboard() {
     );
   }
 
-  // Show login page if not authenticated
+  // Redirect to login page if not authenticated
   if (!auth.user) {
-    return <LoginPage onLogin={() => {}} />;
+    // Use window.location for full page reload to clear any cached state
+    window.location.href = '/login';
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+          <p className="text-slate-600 dark:text-slate-400">Redirecting to login...</p>
+        </div>
+      </div>
+    );
   }
 
   // Show profile page if requested
