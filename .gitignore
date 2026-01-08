@@ -25,6 +25,10 @@ wheels/
 .installed.cfg
 *.egg
 
+# Frontend: keep React source libs tracked (the generic lib/ ignore above would otherwise hide them)
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Node
 node_modules/
 npm-debug.log*

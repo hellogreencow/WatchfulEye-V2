@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Shield, 
@@ -16,10 +16,12 @@ import {
   Infinity,
   Lock
 } from 'lucide-react';
-import { EP_PACKAGES, upgradeToWarRoom, getSubscription } from '../../lib/subscription';
+import { EP_PACKAGES, getSubscription, type SubscriptionState, upgradeToWarRoom } from '../../lib/subscription';
 import { PaymentModal } from '../ui/chimera/PaymentModal';
+import { useAuth } from '../../Dashboard';
 
 export function Pricing() {
+  const auth = useAuth();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [paymentModal, setPaymentModal] = useState<{
     isOpen: boolean;
@@ -31,7 +33,33 @@ export function Pricing() {
     tier: 'war-room',
     amount: 29,
   });
-  const subscription = getSubscription();
+  const [subscription, setSubscription] = useState<SubscriptionState>({
+    tier: 'free',
+    package: 'free',
+    active: false,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const uid = auth.user?.id;
+    // If unauthenticated, treat as free.
+    if (!uid) {
+      setSubscription({ tier: 'free', package: 'free', active: false });
+      return () => {
+        cancelled = true;
+      };
+    }
+    getSubscription(String(uid))
+      .then((s) => {
+        if (!cancelled) setSubscription(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSubscription({ tier: 'free', package: 'free', active: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.user?.id]);
 
   const handleUpgrade = () => {
     const amount = billingCycle === 'monthly' ? 29 : 199;
@@ -57,19 +85,20 @@ export function Pricing() {
   };
 
   const handlePaymentSuccess = () => {
-    upgradeToWarRoom();
+    void upgradeToWarRoom(auth.user?.id ? String(auth.user.id) : undefined);
     window.location.reload(); // Reload to show new features
   };
 
   const handlePurchaseEP = (pkg: typeof EP_PACKAGES[0]) => {
+    const bonus = pkg.bonus ?? 0;
     setPaymentModal({
       isOpen: true,
       tier: 'ep-package',
       amount: pkg.price,
       packageDetails: {
-        title: `${(pkg.amount + pkg.bonus).toLocaleString()} EyePoints`,
-        description: pkg.bonus > 0 
-          ? `${pkg.amount.toLocaleString()} EP + ${pkg.bonus.toLocaleString()} Bonus EP`
+        title: `${(pkg.amount + bonus).toLocaleString()} EyePoints`,
+        description: bonus > 0 
+          ? `${pkg.amount.toLocaleString()} EP + ${bonus.toLocaleString()} Bonus EP`
           : 'Boost your EyePoints balance',
         features: [
           'Instant delivery',
