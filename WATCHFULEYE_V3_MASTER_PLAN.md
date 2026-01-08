@@ -145,6 +145,22 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
 - Parallel work is fine, but **merge order is sequential** (WS0 → WS1 → WS2…).
 - Acceptance criteria must be met before merging.
 
+#### 3.5 Repo governance (non-negotiable)
+- **No auto-merge**: disabled repo-wide; merges are manual and intentional.
+- **Protected `master`**:
+  - no direct pushes
+  - PR required + CI green + (at least) 1 approval
+- **One PR = one workstream slice**: never mix infra + frontend animation + categorization fixes in one PR.
+- **Branch naming**: `ws0/*`, `ws1/*`, `ws3/*`, `ws4/*`, `infra/*`, `docs/*`, `fix/*`.
+
+#### 3.6 Staging discipline (do not break prod)
+- **Staging is Cloudflare Access-gated** (Zero Trust → Access) and must present a login wall.
+- **Origin is Cloudflare-only**: staging origin vhost denies non-Cloudflare source IPs (prevents bypassing Access via direct IP).
+- **Service isolation**:
+  - staging backend uses its own unit + port + DB snapshot (already `watchfuleye-backend-staging`, `127.0.0.1:5004`)
+  - staging frontend uses its own unit + port + build directory (avoid sharing `/opt/.../frontend/build` with prod)
+- **Deploy order**: staging first → validate → only then promote to prod when explicitly approved.
+
 ---
 
 ### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
