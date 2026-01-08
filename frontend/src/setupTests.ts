@@ -4,25 +4,6 @@
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
-// JSDOM does not implement <canvas>. Many UI components draw to canvas, but unit tests
-// should not require a full canvas implementation. Stub getContext to keep tests deterministic.
-Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-  value: jest.fn(() => {
-    // Minimal mock of a 2D context used by our components.
-    return {
-      clearRect: jest.fn(),
-      fillRect: jest.fn(),
-      beginPath: jest.fn(),
-      arc: jest.fn(),
-      fill: jest.fn(),
-      createRadialGradient: jest.fn(() => ({
-        addColorStop: jest.fn(),
-      })),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
-  }),
-});
-
 // CRA/Jest in this repo is not configured to transform ESM in node_modules.
 // axios (recent versions) ships ESM entrypoints, which breaks tests with:
 // "SyntaxError: Cannot use import statement outside a module".
