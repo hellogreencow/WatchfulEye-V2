@@ -49,6 +49,17 @@ V3 keeps this shell and replaces simulation with real contracts and a profession
 - **Consistent verbs** everywhere: **Examine**, **Monitor**, **Pin**, **Share**, **Export**.
 - **No fake sentiment**: current sentiment distribution is known-flawed; any sentiment shown must declare method + confidence + data sources.
 
+#### Baseline parity panel rule (sequencing brutality)
+For any “baseline parity” panel (e.g., a **stock heatmap**), we do **not** overbuild early.
+- **Must support exactly two actions**:
+  - **Examine this mover**
+  - **Monitor this ticker/sector**
+- **Server contract is minimal and real**:
+  - saved layout, pinned modules, user preferences (no client secrets)
+- **Data surface may be embedded initially**:
+  - v1 can be an embedded widget behind a flag
+  - v2 becomes provider-backed via WS5 once the data plane is stable
+
 ---
 
 ### 1.2) Baseline Parity Pack (Situation Monitor‑class) + Leapfrog Pack (WatchfulEye‑class)
@@ -65,6 +76,10 @@ V3 keeps this shell and replaces simulation with real contracts and a profession
   - Unified feed with tags, dedupe, and “deep dive” action.
 - **Stocks/Crypto Pulse**:
   - Real‑time quotes + volatility + regime hints.
+- **Stock Heatmap (Option A: embed-first)**:
+  - v1: embedded heatmap widget behind `V3_HEATMAP_EMBED` (parity, fast, zero licensing/constituent complexity in-house).
+  - Must expose only two actions: **Examine this mover** / **Monitor this ticker/sector**.
+  - v2: first‑party provider-backed heatmap once WS0 identifiers + WS5 markets connector are stable.
 - **Prediction Markets**:
   - Polymarket odds + drift alerts + “why odds moved” evidence.
 - **Tech layoffs tracker**:
@@ -104,6 +119,8 @@ V3 keeps this shell and replaces simulation with real contracts and a profession
 #### 2.2 Canonical entities (what we persist and render)
 - **IntelItem**: normalized item from any feed (news/telegram/market/event/dataset).
 - **Evidence**: raw payload + normalized fields + provenance + timestamps.
+- **Entity**: canonical identity for tickers/orgs/countries/people/sanctions targets with stable IDs.
+- **Identifier / Alias**: mappings for tickers/ISIN/CIK/domain/name variants → `Entity` (plus confidence + source).
 - **Investigation**: user‑initiated “Examine X” mission (scope, timebox, status).
 - **AgentRun / Step / ToolCall**: replayable run details + budgets + safety tags.
 - **Report**: consolidated intelligence report with predictions + uncertainty + citations.
@@ -138,14 +155,20 @@ Each workstream below is designed to be **independently implemented** with minim
 - **Delivers**:
   - `/api/v3/*` endpoint map + request/response schemas.
   - Canonical DB schema for IntelItem/Evidence/Investigation/Report/AlertRule/ModuleSpec.
+  - **Entity Resolution + Identifiers (contract-level dependency)**:
+    - `Entity`, `EntityIdentifier`, `EntityAlias` schemas
+    - minimal resolver: string → canonical entity (ticker/org/country/sanctions target) with confidence + provenance
+    - “same-as” linking for dedupe/merges and auditability
   - Event schema for structured logs (`event_type`, `workflow_id`, `latency_ms`, `user_id`, `trace_id`).
   - Budgets for agent runs (max steps, max tool calls, max time).
 - **Owns**:
   - `contracts/` (new) + `db/migrations/` (new) + `docs/V3_CONTRACTS.md` (new).
 - **Feature flags**:
   - `V3_API_ENABLED`, `V3_AUDIT_LOGS`.
+  - `V3_ENTITY_IDS`.
 - **Acceptance**:
   - Contract docs exist, schemas compile, no production endpoints broken.
+  - The resolver can map at least: ticker→entity, country name→entity, sanctions list name→entity (with confidence + provenance).
 
 #### WS1 — Main News Feed (Global Briefing) — Preserve + Professionalize
 - **Goal**: keep the existing main feed experience, but make the data plane authoritative.
@@ -267,6 +290,7 @@ Each workstream below is designed to be **independently implemented** with minim
 
 #### WS4 — Investigations (“Examine X”) + Consolidated Report Output (Core Loop)
 - **Goal**: the terminal input triggers a real mission with evidence + predictions.
+- **Hard dependency**: WS0 identifiers/entity-resolution must exist so investigations don’t fragment (“same entity” across sources).
 - **Delivers**:
   - `/api/v3/investigations` create/run/status + `/api/v3/reports/:id`.
   - Agent planner → evidence pack → synthesis → red‑team check → final report.
@@ -360,6 +384,9 @@ Each workstream below is designed to be **independently implemented** with minim
   - Module catalog wired to server connectors (no raw endpoint/headers in client).
   - User layouts saved server‑side.
   - Baseline Parity Pack modules implemented as first‑class ModuleSpecs (map, livestream, intel feed, markets, polymarket, layoffs, AI race, liquidity, dossiers).
+  - **Baseline parity embed allowance**:
+    - panels may embed a data surface in v1, but must still use server-backed state (layout/pin/preferences)
+    - embeds must still route actions through the core verbs (**Examine**, **Monitor**) so they feed WS4/WS6
 - **Owns**:
   - `frontend/src/modules/*` (new) + `/api/v3/modules/*`.
 - **Flags**:
