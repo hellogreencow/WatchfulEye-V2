@@ -152,6 +152,7 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
   - PR required + CI green + (at least) 1 approval
 - **One PR = one workstream slice**: never mix infra + frontend animation + categorization fixes in one PR.
 - **Branch naming**: `ws0/*`, `ws1/*`, `ws3/*`, `ws4/*`, `infra/*`, `docs/*`, `fix/*`.
+ - **Enforcement**: these rules are enforced via GitHub **branch protection** + required checks + reviewer approval (verify in repo settings once, then treat as locked).
 
 #### 3.6 Staging discipline (do not break prod)
 - **Staging is Cloudflare Access-gated** (Zero Trust → Access) and must present a login wall.
@@ -172,19 +173,54 @@ Each workstream below is designed to be **independently implemented** with minim
   - `/api/v3/*` endpoint map + request/response schemas.
   - Canonical DB schema for IntelItem/Evidence/Investigation/Report/AlertRule/ModuleSpec.
   - **Entity Resolution + Identifiers (contract-level dependency)**:
-    - `Entity`, `EntityIdentifier`, `EntityAlias` schemas
-    - minimal resolver: string → canonical entity (ticker/org/country/sanctions target) with confidence + provenance
-    - “same-as” linking for dedupe/merges and auditability
+    - Schemas:
+      - `Entity` (canonical identity)
+      - `EntityIdentifier` (ticker/ISIN/CIK/ISO codes → entity)
+      - `EntityAlias` (name variants/aliases → entity)
+    - **Resolver contract** (single, explicit surface):
+      - `POST /api/v3/entities/resolve`
+      - request: `{ "q": string, "k": number=10, "types": ["ticker"|"org"|"country"|"sanctions_target"] }`
+      - response: `{ "matches": [{ "entity_id": string, "entity_type": string, "label": string, "confidence": number(0..1), "provenance": {...} }], "trace_id": string }`
+    - **Confidence**:
+      - numeric \(0..1\)
+      - computed as: `confidence = base_source_weight * string_sim * type_consistency`
+        - `base_source_weight`: 1.0 for authoritative lists (OFAC/ISO), 0.7 for market data providers, 0.5 for extracted-from-text
+        - `string_sim`: normalized string similarity (e.g., Jaro-Winkler/Levenshtein ratio) with minimum thresholds per type
+        - `type_consistency`: 1.0 if identifier type matches entity type, else 0.0
+    - **Provenance fields (returned on every match / stored on identifiers+aliases)**:
+      - `source_system` (e.g., `ofac_sdn`, `iso3166`, `provider_markets`)
+      - `source_record_id` (the upstream identifier if available)
+      - `ingest_timestamp` (UTC ISO)
+      - `match_algorithm` (e.g., `exact`, `normalized_exact`, `fuzzy_jw`, `manual`)
+      - `match_inputs` (normalized query + any parsed tokens)
+      - `curator_id` (nullable; set if a human overrides/merges)
+    - **Same-as linking semantics (dedupe without losing auditability)**:
+      - default: **link**, don’t merge (store `same_as` edges) unless confidence is high
+      - merge only when:
+        - authoritative identifier collision (same CIK/ISIN/OFAC id), OR
+        - confidence ≥ 0.95 and no conflicting authoritative identifiers
+      - conflicts: keep separate entities + create a `same_as` link marked `conflicted=true`
+      - audit trail: every merge/link/unlink is an append-only event with `who/when/why`
   - Event schema for structured logs (`event_type`, `workflow_id`, `latency_ms`, `user_id`, `trace_id`).
   - Budgets for agent runs (max steps, max tool calls, max time).
 - **Owns**:
   - `contracts/` (new) + `db/migrations/` (new) + `docs/V3_CONTRACTS.md` (new).
 - **Feature flags**:
   - `V3_API_ENABLED`, `V3_AUDIT_LOGS`.
-  - `V3_ENTITY_IDS`.
+  - `V3_ENTITY_IDS` (enables Entity/Identifier/Alias APIs; default OFF in prod)
+  - `V3_HEATMAP_EMBED` (enables embedded heatmap panel v1; default OFF in prod; used by WS7 modules)
 - **Acceptance**:
   - Contract docs exist, schemas compile, no production endpoints broken.
-  - The resolver can map at least: ticker→entity, country name→entity, sanctions list name→entity (with confidence + provenance).
+  - Coverage (minimum viable, explicit):
+    - **Tickers**: top **5,000** US equities by liquidity/market cap (ingested from a single chosen provider list)
+    - **Countries**: ISO-3166 country codes + common names
+    - **Sanctions**: OFAC SDN (and one consolidated sanctions list source, e.g. EU/UK/UN as available)
+  - Resolver behavior:
+    - returns **k** matches sorted by confidence
+    - returns confidence \(0..1\) + provenance object on every match
+    - enforces dedupe rules (exact id collisions collapse to 1; otherwise same-as links)
+  - Same-as semantics:
+    - merges are audited; links are reversible; conflicts never silently overwrite authoritative identifiers.
 
 #### WS1 — Main News Feed (Global Briefing) — Preserve + Professionalize
 - **Goal**: keep the existing main feed experience, but make the data plane authoritative.
