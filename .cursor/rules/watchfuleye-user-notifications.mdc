@@ -1,0 +1,218 @@
+---
+alwaysApply: true
+---
+## WatchfulEye — User Notification Protocol
+
+### Purpose
+Ensure clear communication with the user about task status, blockers, and completion states.
+
+### Priority: 🔴 CRITICAL
+These notifications are MANDATORY for proper workflow coordination.
+
+### Notification Requirements
+
+#### 1. ⚠️ INPUT NEEDED (Blocking)
+**Trigger**: When you need user decision/input to proceed
+**Format**:
+```
+⚠️ INPUT NEEDED: [Clear question or decision needed]
+
+Options:
+- [Option 1]: [Brief description]
+- [Option 2]: [Brief description]
+
+Waiting for your response before proceeding.
+```
+
+**Examples**:
+- Authentication method selection
+- API choice between alternatives
+- Configuration decisions
+- Ambiguous requirements clarification
+- Trade-off decisions requiring user preference
+
+**Behavior**: STOP and WAIT for user response. Do NOT proceed until input received.
+
+---
+
+#### 2. ✅ TASK COMPLETE (Status Update)
+**Trigger**: When a task, workstream slice, or major operation is complete
+**Format**:
+```
+✅ TASK COMPLETE: [Task name]
+
+Completed:
+- [Item 1]
+- [Item 2]
+- [Item 3]
+
+Status:
+- Tests: [passing/failing]
+- CI: [green/pending]
+- Branch: [branch-name]
+- PR: [#number or "ready to create"]
+
+Next: [What should happen next or "Awaiting instructions"]
+```
+
+**Examples**:
+- Workstream slice implementation finished
+- Database migration completed
+- Feature implementation done
+- Bug fix complete and tested
+- Documentation update finished
+
+**Behavior**: Clearly announce completion with summary and next steps.
+
+---
+
+#### 3. 🔔 STATUS UPDATE (Non-blocking)
+**Trigger**: Major state changes, important milestones, or long-running operations
+**Format**:
+```
+🔔 STATUS UPDATE: [What changed]
+
+Details:
+- [Key detail 1]
+- [Key detail 2]
+
+Continuing with: [Next step]
+```
+
+**Examples**:
+- Starting a new workstream slice
+- Switching approaches due to blockers
+- CI checks passed
+- Tests completed successfully
+- Large file operations in progress
+
+---
+
+#### 4. ⚠️ ERROR ENCOUNTERED (Critical Alert)
+**Trigger**: Errors, failures, or unexpected issues requiring attention
+**Format**:
+```
+⚠️ ERROR ENCOUNTERED: [Error type]
+
+Error:
+[Error message or description]
+
+Investigation:
+- [What was attempted]
+- [Root cause analysis]
+
+Options:
+1. [Recommended fix]
+2. [Alternative approach]
+3. [Workaround if applicable]
+
+Should I proceed with option 1? (or waiting for your decision)
+```
+
+**Behavior**: Report error clearly, analyze, suggest fix, wait for approval if uncertain.
+
+---
+
+### Integration with TodoWrite
+When using TodoWrite for task tracking, ALWAYS notify on completion:
+
+```
+✅ TASK COMPLETE: [Task name]
+
+TodoWrite Status:
+- Total tasks: X
+- Completed: Y
+- Remaining: Z
+
+Current task status: All todos marked complete
+
+Next: [Next task from todo list or "All tasks complete, awaiting instructions"]
+```
+
+---
+
+### Session Lifecycle Notifications
+
+**Session Start**:
+```
+🔔 SESSION STARTED
+
+Context loaded:
+- Branch: [branch-name]
+- Last work: [summary]
+- Current task: [task-name]
+- State file: [.cursor/state/current-position.md]
+
+Proceeding with: [Next action]
+```
+
+**Session End**:
+```
+✅ SESSION COMPLETE
+
+Summary:
+- Tasks completed: [list]
+- Files modified: [count]
+- Tests: [status]
+- Git: [commit status]
+- State saved: [yes/no]
+
+Ready for next session.
+```
+
+---
+
+### Examples
+
+#### Good Example (Input Needed)
+```
+⚠️ INPUT NEEDED: WS6.1 Forecast Schema Design Decision
+
+For the forecast storage, I need to decide on the time horizon structure:
+
+Option 1: Discrete horizons (7-day, 30-day, 90-day)
+- Pros: Simple queries, clear categories
+- Cons: Less flexible for custom horizons
+
+Option 2: Continuous horizon (days_ahead: integer)
+- Pros: Flexible for any horizon
+- Cons: More complex queries, needs horizon bucketing
+
+Which approach do you prefer?
+
+Waiting for your response before creating the schema.
+```
+
+#### Good Example (Task Complete)
+```
+✅ TASK COMPLETE: WS6.1 Forecast Schema Implementation
+
+Completed:
+- Created forecasts table with continuous horizon approach
+- Added forecast_updates table for audit trail
+- Implemented Brier score calculation
+- Added tests for forecast extractor
+- Updated schema documentation
+
+Status:
+- Tests: ✅ 15/15 passing
+- CI: ✅ Green
+- Branch: ws6.1/forecast-accountability
+- PR: Ready to create
+
+Next: Implement outcome tracker or create PR?
+```
+
+#### Bad Example (No Notification)
+```
+[Agent completes task silently without announcing]
+[Agent proceeds to next task without user confirmation]
+```
+
+---
+
+### Enforcement
+- Every task completion MUST have a ✅ TASK COMPLETE notification
+- Every blocking decision MUST have a ⚠️ INPUT NEEDED notification
+- Never proceed past a blocking point without user input
+- Always provide clear next steps or ask what to do next
