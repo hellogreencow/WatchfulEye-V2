@@ -42,6 +42,7 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
   - `sudo systemctl restart watchfuleye-frontend-staging`
 
 ### Production deploy discipline (must be followed)
+- **NEVER deploy V3 features to production**. V3 is flag-gated and defaults OFF. Production is frozen until V3 is complete and ready for full replacement.
 - **Never run production from the dev workspace**. Prod must be isolated from in-progress branches.
 - **Production deploy worktree**: `/opt/watchfuleye2-prod` (tracks `origin/master` only via local branch `prod/master`).
 - **Prod services must point at prod worktree**:
@@ -52,6 +53,7 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
   - (frontend updates) `cd frontend && npm ci && npm run build`
   - `sudo systemctl restart watchfuleye-backend watchfuleye-frontend`
 - **DB safety (critical)**: ensure prod uses an **absolute** `DB_PATH` (e.g. `/opt/watchfuleye2/news_bot.db`) via env file or a systemd override. Relative `DB_PATH=news_bot.db` will create a new empty DB in the worktree and break AI/reporting.
+- **V3 readiness criteria**: V3 is ready for prod replacement only when ALL workstreams complete, staging validation passes, performance benchmarks met, security audit passed, documentation complete, and rollback plan tested. Until then, prod remains frozen.
 
 ### New-chat handoff rule (so fresh agents don’t lose context)
 - When starting a new agent chat, paste:

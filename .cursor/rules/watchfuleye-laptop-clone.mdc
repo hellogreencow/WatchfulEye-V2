@@ -1,0 +1,213 @@
+---
+alwaysApply: true
+---
+
+## WatchfulEye V3 — Laptop Clone Workflow (CRITICAL CONTEXT PRESERVATION)
+
+### Purpose
+This rule ensures agents working on a **laptop clone** of the WatchfulEye repo maintain full context and discipline, preventing loss of V3 plan, staging/prod boundaries, and workstream execution model.
+
+### Laptop Clone Setup (one-time)
+1. **Clone repo to laptop**:
+   ```bash
+   git clone <repo-url> ~/watchfuleye2
+   cd ~/watchfuleye2
+   git checkout master
+   ```
+
+2. **Verify you have**:
+   - `WATCHFULEYE_V3_MASTER_PLAN.md` (single source of truth)
+   - `.cursor/rules/watchfuleye-v3.mdc` (operating rules)
+   - `.cursor/rules/watchfuleye-laptop-clone.mdc` (this file)
+   - All V3 workstream code (`watchfuleye/v3/*`, `frontend/src/v3/*`)
+
+3. **Environment setup**:
+   - Python venv: `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt -r requirements-dev.txt`
+   - Frontend deps: `cd frontend && npm ci`
+   - Postgres (if testing locally): ensure `pgvector` extension available
+
+### Production Isolation Rule (NON-NEGOTIABLE)
+- **NEVER deploy V3 features to production**. V3 is flag-gated and defaults OFF.
+- **Production is frozen** until V3 is complete and ready for full replacement.
+- **Prod fixes** (non-V3 bug fixes) can be hotfixed directly on server, but must be committed/pushed immediately after.
+- **V3 work happens ONLY in**:
+  - Dev workspace on server (`/opt/watchfuleye2`) for staging testing
+  - Laptop clone (`~/watchfuleye2`) for development
+  - Staging environment (`/opt/watchfuleye2-staging`) for V3 validation
+
+### Laptop Development Workflow
+
+#### Starting Work on a New Slice
+1. **Pull latest master**:
+   ```bash
+   cd ~/watchfuleye2
+   git fetch origin master
+   git checkout master
+   git pull --ff-only origin master
+   ```
+
+2. **Create feature branch** (from `origin/master`, not local `master`):
+   ```bash
+   git checkout -b wsX/<slice-name> origin/master
+   ```
+
+3. **Verify current slice** (from `WATCHFULEYE_V3_MASTER_PLAN.md`):
+   - Check `CURRENT NEXT SLICE` section
+   - Confirm owned files/dirs for this workstream
+   - Verify feature flags needed
+
+#### During Development
+- **Follow workstream boundaries**: only edit files owned by your workstream (see master plan).
+- **Test locally** (if possible):
+  - Backend: `python -m unittest discover -s tests -p "test_*.py"`
+  - Frontend: `cd frontend && npm run build` (check for TypeScript/ESLint errors)
+- **Commit frequently** with clear messages: `wsX: <brief description>`
+
+#### Finishing a Slice
+1. **Ensure CI passes locally**:
+   ```bash
+   # Backend
+   ruff check . && mypy watchfuleye/
+   python -m unittest discover -s tests -p "test_*.py"
+   
+   # Frontend
+   cd frontend
+   npm run lint
+   npm run typecheck
+   npm run build
+   ```
+
+2. **Push branch**:
+   ```bash
+   git push origin wsX/<slice-name>
+   ```
+
+3. **Open PR** (use GitHub web UI or `gh pr create`):
+   - Use `.github/pull_request_template.md`
+   - Fill all required sections
+   - Link to master plan workstream section
+
+4. **Wait for CI + CodeRabbit**:
+   - CI must be green (lint, typecheck, tests, build)
+   - CodeRabbit comments must be addressed (or explicitly deferred)
+   - Get approval if required
+
+5. **Merge to master** (after CI/CodeRabbit green)
+
+#### After Merge
+- **Pull latest master**:
+   ```bash
+   git checkout master
+   git pull --ff-only origin master
+   ```
+
+- **Update master plan** (if you're the one merging):
+  - Update `CURRENT NEXT SLICE` to the next slice
+  - Update any acceptance criteria that were completed
+  - Commit and push the master plan update
+
+### Server Staging Deployment (from laptop, via SSH)
+After a slice is merged to `master`, deploy to staging for validation:
+
+```bash
+# SSH into server
+ssh user@server
+
+# Deploy to staging worktree
+cd /opt/watchfuleye2-staging
+git pull --ff-only origin master
+sudo systemctl restart watchfuleye-backend-staging
+sudo systemctl restart watchfuleye-frontend-staging
+
+# Test staging URL (Cloudflare Access-gated)
+# Verify V3 flags work, no regressions
+```
+
+### Context Preservation for Fresh Agents
+
+#### When Starting a New Agent Chat on Laptop
+**Paste this entire block** into the first message:
+
+```
+I'm working on WatchfulEye V3 from a laptop clone. Here's the critical context:
+
+1. **Master Plan**: Read `WATCHFULEYE_V3_MASTER_PLAN.md` — this is the single source of truth for V3 architecture, workstreams (WS0-WS12), contracts, and sequencing.
+
+2. **Current State**:
+   - Current next slice: [CHECK `CURRENT NEXT SLICE` in master plan]
+   - Last merged PR: [CHECK GitHub]
+   - Staging status: [CHECK if latest master is deployed to staging]
+
+3. **Production Rule**: NEVER deploy V3 to prod. Prod is frozen until V3 is complete. V3 features are flag-gated and default OFF.
+
+4. **Workflow**:
+   - I'm on laptop clone at `~/watchfuleye2`
+   - Create branches from `origin/master`: `git checkout -b wsX/<slice> origin/master`
+   - One workstream slice per branch/PR
+   - CI must be green (lint, typecheck, tests, build)
+   - CodeRabbit review required (check via GitHub MCP if needed)
+
+5. **Figma Make is UI truth**: Match Figma Make prototype for V3 surfaces. Use Figma MCP if available to pull latest nodes before implementing UI.
+
+6. **Key Files**:
+   - `WATCHFULEYE_V3_MASTER_PLAN.md` — architecture, workstreams, contracts
+   - `.cursor/rules/watchfuleye-v3.mdc` — operating rules
+   - `.cursor/rules/watchfuleye-laptop-clone.mdc` — laptop workflow (this file)
+   - `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` — parallel-safe execution model
+
+7. **Owned Paths** (per workstream, from master plan):
+   - WS0: `watchfuleye/v3/entities*`, `watchfuleye/v3/flags.py`, `contracts/v3/entities.*`
+   - WS1: `watchfuleye/v3/ingest/news/*`
+   - WS2: `watchfuleye/v3/feeds/*`
+   - WS3: `watchfuleye/v3/ingest/telegram/*`
+   - WS4: `watchfuleye/v3/investigations/*`
+   - WS5: `watchfuleye/v3/connectors/*`
+   - WS6.1: `watchfuleye/v3/forecast/*`
+   - WS7: `watchfuleye/v3/modules/*`, `frontend/src/v3/modules/*`
+   - WS8: `watchfuleye/v3/panel_builder/*`
+   - WS9: `watchfuleye/v3/map_layers/*`
+   - WS10: `watchfuleye/v3/campaigns/*`
+   - WS11: `watchfuleye/v3/multi_display/*`
+   - WS12: `watchfuleye/v3/immersion/*`
+
+8. **Non-Negotiables**:
+   - Never break Main News Feed, Custom News Feed, Telegram Intel Reports, Intel Reports, AI Analysis Modal
+   - All V3 features behind `V3_*` flags, default OFF
+   - One workstream slice per PR
+   - CI green required for merge
+   - CodeRabbit review addressed (or explicitly deferred)
+
+What's the current next slice, and what should I work on?
+```
+
+### Server vs Laptop Sync
+- **Laptop is source of truth** for V3 development going forward.
+- **Server dev workspace** (`/opt/watchfuleye2`) is for staging testing only.
+- **Server staging worktree** (`/opt/watchfuleye2-staging`) pulls from `origin/master` after PRs merge.
+- **Server prod worktree** (`/opt/watchfuleye2-prod`) is frozen (no V3 changes).
+
+### Emergency Prod Fixes (Non-V3)
+If prod needs a non-V3 bug fix:
+1. **Fix directly on server** (`/opt/watchfuleye2-prod`)
+2. **Test immediately**
+3. **Commit and push** to `master` (or hotfix branch if needed)
+4. **Pull fix to laptop** to keep in sync
+
+### V3 Readiness Criteria (for Full Prod Replacement)
+V3 is ready for prod replacement when:
+- [ ] All workstreams (WS0-WS12) complete and merged
+- [ ] Staging validation passes (all V3 features work, no regressions)
+- [ ] Performance benchmarks met (latency, throughput)
+- [ ] Security audit passed (no client secrets, all connectors governed)
+- [ ] Documentation complete (API contracts, deployment guide)
+- [ ] Rollback plan tested and documented
+
+**Until ALL criteria are met, V3 stays in staging. Prod remains frozen.**
+
+### Agent Memory Rules
+- **Always read `WATCHFULEYE_V3_MASTER_PLAN.md`** before starting work
+- **Always check `CURRENT NEXT SLICE`** to know what to work on
+- **Always verify owned paths** before editing files
+- **Always run CI checks locally** before pushing
+- **Always use feature flags** for V3 features (default OFF)
+- **Never deploy V3 to prod** until readiness criteria are met
