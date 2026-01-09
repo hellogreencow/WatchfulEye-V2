@@ -194,13 +194,13 @@ def _calculate_recent_performance(
         List of dicts: [{"date": "YYYY-MM-DD", "brier": float, "count": int}]
     """
     from collections import defaultdict
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     resolved = [f for f in forecasts if f["outcome_status"] == "resolved"]
 
     # Group by date
     by_date = defaultdict(list)
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     for f in resolved:
         measured_at = f.get("outcome_measured_at")
