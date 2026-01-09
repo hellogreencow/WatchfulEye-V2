@@ -1,9 +1,6 @@
 ---
-description: WatchfulEye V3 build discipline (workstreams, flags, CodeRabbit, push/PR hygiene)
-globs:
-  - "**/*"
+alwaysApply: true
 ---
-
 ## WatchfulEye V3 — Operating Rules (must follow)
 
 ### Prime directive

@@ -6,7 +6,7 @@ This module is intentionally simple and deterministic.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -51,13 +51,19 @@ def _upsert_identifier(
           entity_id = EXCLUDED.entity_id,
           confidence = EXCLUDED.confidence,
           provenance = EXCLUDED.provenance
+        WHERE
+          entity_identifiers.entity_id = EXCLUDED.entity_id
+          OR (entity_identifiers.provenance->>'source_system') = 'seed_minimal'
         """,
         (entity_id, identifier_type, identifier_value, confidence, Jsonb(provenance)),
     )
 
 
 def seed_minimal_countries(pg_dsn: str) -> int:
-    """Seed a minimal set of countries (enough to prove resolver works end-to-end)."""
+    """Seed a minimal set of countries.
+
+    Returns: number of country entities processed (not DB rows).
+    """
     ensure_postgres_schema(pg_dsn)
     rows: list[tuple[str, str, str]] = [
         ("USA", "United States", "US"),
@@ -99,11 +105,15 @@ def seed_minimal_countries(pg_dsn: str) -> int:
 
 
 def seed_minimal_sanctions_targets(pg_dsn: str) -> int:
-    """Seed a minimal set of sanctions targets (enough to prove the sanctions_target path)."""
+    """Seed a minimal set of sanctions targets.
+
+    Returns: number of sanctions_target entities processed (not DB rows).
+    """
     ensure_postgres_schema(pg_dsn)
     targets: list[tuple[str, str]] = [
         ("OFAC_TEST_0001", "Example Sanctions Target"),
     ]
+    processed = 0
     with psycopg.connect(pg_dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
             for (ofac_id, label) in targets:
@@ -125,6 +135,7 @@ def seed_minimal_sanctions_targets(pg_dsn: str) -> int:
                     confidence=0.8,
                     provenance={"source_system": "seed_minimal", "kind": "name"},
                 )
-    return len(targets)
+                processed += 1
+    return processed
 
 
