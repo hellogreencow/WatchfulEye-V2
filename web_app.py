@@ -2826,6 +2826,29 @@ def get_stats():
     """Get dashboard statistics"""
     try:
         stats = db.get_stats()
+        
+        # Override total_articles from Postgres if available (articles are in Postgres, not SQLite)
+        if _pg_articles is not None:
+            try:
+                import psycopg
+                with psycopg.connect(PG_DSN) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT COUNT(*) FROM articles")
+                        row = cur.fetchone()
+                        if row and row[0] is not None:
+                            stats['total_articles'] = int(row[0])
+                            
+                        # Also update recent_articles_count from Postgres (last 24h)
+                        cur.execute("""
+                            SELECT COUNT(*) FROM articles
+                            WHERE created_at >= now() - interval '24 hours'
+                        """)
+                        row = cur.fetchone()
+                        if row and row[0] is not None:
+                            stats['recent_articles_count'] = int(row[0])
+            except Exception as e:
+                logger.warning(f"Failed to get Postgres stats, using SQLite: {e}")
+        
         response = jsonify({
             'success': True,
             'data': stats,
