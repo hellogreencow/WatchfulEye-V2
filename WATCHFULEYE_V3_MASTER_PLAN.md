@@ -215,6 +215,7 @@ Two working directories (DO NOT MIX):
 1) DEV workspace (feature work): /opt/watchfuleye2
    - You create branches here.
    - You never deploy staging from here.
+   - Note: `master` is checked out in the staging worktree, so create branches from `origin/master`.
 2) STAGING deploy worktree (master-only): /opt/watchfuleye2-staging
    - This worktree must stay on origin/master.
    - You deploy staging from here only.
@@ -245,23 +246,28 @@ CURRENT STATE (as of this chat):
   - entity_identifiers
   - entity_aliases
   - entity_same_as_edges
+- Staging seeding (WS0.5) exists as an **operator tool** (not on request paths):
+  - `python -m watchfuleye.v3.seed_entities --pg-dsn "$PG_DSN"`
+  - Seeds ISO-3166 from vendored JSON + OFAC SDN from official SDN CSV (downloaded + cached + provenance recorded)
+- On this server, staging backend should run from the staging worktree:
+  - `systemctl cat watchfuleye-backend-staging.service` should show `WorkingDirectory=/opt/watchfuleye2-staging`
 
 CURRENT NEXT SLICE (execute this first unless told otherwise):
-- WS0.4 Seed ISO‑3166 countries + sanctions targets into entities so resolver returns real matches in staging.
-  - Must NOT use external network calls during seeding. Deterministic seed only.
-  - Must NOT hijack existing identifiers in staging (do not silently re-point an identifier owned by another entity).
+- WS4.0 “Examine X” MVP skeleton (flagged): create the minimal investigation/run loop that produces a consolidated report (even if v1 uses existing news/RAG as evidence).
 
-Acceptance criteria for WS0.4:
-- With V3_ENTITY_IDS=true in staging backend:
-  - q="US", types=["country"] returns at least one match with entity_type="country"
-  - q="<some ofac id>", types=["sanctions_target"] returns at least one match with entity_type="sanctions_target"
-- CI remains green.
+Acceptance criteria for WS4.0:
+- Flagged endpoint exists (default OFF) and cannot break V1:
+  - Suggested: `V3_EXAMINE_MVP` and `POST /api/v3/examine`
+- When flag OFF: endpoint is hidden (404).
+- When flag ON: endpoint returns a stable investigation id + trace id, and produces a minimal report payload (even if first version is stubbed).
+- Tests exist for flag OFF/ON behavior.
 - Rollback is “flag OFF” (no user-visible regression when OFF).
 
 Operational verification steps for agent:
 1) Confirm you are in DEV workspace (/opt/watchfuleye2) before coding.
 2) Confirm git status is clean before creating a branch.
-3) Create a correctly named branch (ws0/* for WS0 work).
+3) Create a correctly named branch from origin/master:
+   - git fetch origin master && git checkout -b wsX/<slice> origin/master
 4) Implement changes + add/adjust tests.
 5) Commit with a clear message (scope prefix recommended).
 6) Push branch and open PR using template; fill required sections (Intent, owned files, flags, verification, rollback).
@@ -282,6 +288,13 @@ Safety constraints:
 
 ### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
 Each workstream below is designed to be **independently implemented** with minimal overlap.
+
+#### Workstream execution playbook (parallel-safe)
+See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
+- branch creation (worktree-aware)
+- owned paths map (backend + frontend)
+- “hot files” list
+- slice checklist (flags, tests, rollback, staging verify)
 
 #### WS0 — V3 Contracts + Safety Envelope (MUST DO FIRST)
 - **Why**: without stable interfaces, parallel work will collide.
@@ -349,7 +362,8 @@ Each workstream below is designed to be **independently implemented** with minim
   - Dedupe + clustering + ranking (“narrative velocity” optional later).
   - `/api/v3/news/main` (list/search/filter) + `/api/v3/news/item/:id` (detail).
 - **Owns**:
-  - `news_ingest_worker.py` (or `watchfuleye/ingest/news/*` if created) + `fulltext_worker.py` + feed storage tables.
+  - `watchfuleye/v3/feeds/news/*` (new) + feed storage tables
+  - Integration touchpoints (hot; only if required): `news_ingest_worker.py`, `fulltext_worker.py`
 - **Flags**:
   - `V3_MAIN_FEED`.
 - **Acceptance**:
@@ -376,7 +390,7 @@ Each workstream below is designed to be **independently implemented** with minim
     - minimum novelty vs previous N reports
     - minimum actionable monitors per report (or explicit reason for none)
 - **Owns**:
-  - `watchfuleye/briefs/*` + report prompt/spec + curation logic
+  - `watchfuleye/v3/reports/*` (new) + report prompt/spec + curation logic
 - **Flags**:
   - `V3_REPORTS_V2`
 - **Acceptance**:
@@ -405,7 +419,7 @@ Each workstream below is designed to be **independently implemented** with minim
   - `/api/v3/news/custom` and `/api/v3/topics/*`.
   - Optional: per-topic scoring + alert hooks.
 - **Owns**:
-  - `watchfuleye/custom_feeds/*` (new) + DB tables for topics and subscriptions.
+  - `watchfuleye/v3/feeds/custom/*` (new) + DB tables for topics and subscriptions
 - **Flags**:
   - `V3_CUSTOM_FEED`.
 - **Acceptance**:
@@ -418,7 +432,8 @@ Each workstream below is designed to be **independently implemented** with minim
   - `/api/v3/telegram/reports` (digests) + `/api/v3/telegram/messages` (raw).
   - Citations: reports can cite telegram evidence IDs.
 - **Owns**:
-  - `main.py` / bot pipeline files + new `watchfuleye/ingest/telegram/*`.
+  - `watchfuleye/v3/telegram_feed/*` (new) + bot pipeline integration
+  - Integration touchpoints (hot; only if required): `main.py`
 - **Flags**:
   - `V3_TELEGRAM_FEED`.
 - **Acceptance**:
@@ -451,7 +466,7 @@ Each workstream below is designed to be **independently implemented** with minim
     - Prompt‑injection defense: strict tool gating; evidence‑only answers when in RAG mode
     - Cost/latency budgets per request; graceful fallback to “fast reply only”
 - **Owns**:
-  - `watchfuleye/telegram_agent/*` (new) + webhook/poller integration
+  - `watchfuleye/v3/telegram_agent/*` (new) + webhook/poller integration
   - Minimal UI deep-link handler in dashboard (`origin=telegram`)
 - **Flags**:
   - `V3_TELEGRAM_AGENT`, `V3_TELEGRAM_INBOUND`, `V3_TELEGRAM_DEEPLINKS`
@@ -468,7 +483,7 @@ Each workstream below is designed to be **independently implemented** with minim
   - Agent planner → evidence pack → synthesis → red‑team check → final report.
   - Streaming updates for progress (SSE/WebSocket).
 - **Owns**:
-  - `watchfuleye/investigations/*` + job runner integration.
+  - `watchfuleye/v3/investigations/*` + job runner integration.
 - **Flags**:
   - `V3_INVESTIGATIONS`, `V3_REPORTS`.
 - **Acceptance**:
@@ -512,7 +527,7 @@ Each workstream below is designed to be **independently implemented** with minim
     - “Asset exposure / scanning” (Censys/Shodan) → **authorized targets only**
     - PII/recon tools → **off by default**
 - **Owns**:
-  - `watchfuleye/connectors/*` + caching layer.
+  - `watchfuleye/v3/connectors/*` + caching layer.
 - **Flags**:
   - `V3_CONNECTORS`, `V3_HIGH_RISK_CONNECTORS`.
 - **Acceptance**:
@@ -525,7 +540,7 @@ Each workstream below is designed to be **independently implemented** with minim
   - Triggers: odds drift, narrative spike, macro print, earthquake threshold, conflict escalation.
   - Notification channels: in‑app + Telegram + email (if configured).
 - **Owns**:
-  - `watchfuleye/alerts/*` + worker/scheduler.
+  - `watchfuleye/v3/alerts/*` + worker/scheduler.
 - **Flags**:
   - `V3_ALERTS`.
 - **Acceptance**:
@@ -543,7 +558,7 @@ Each workstream below is designed to be **independently implemented** with minim
   - UX surfaces:
     - “Track record” panel + per-report “how past forecasts performed”
 - **Owns**:
-  - `watchfuleye/forecasting/*` (new) + DB tables (in WS0 schema)
+  - `watchfuleye/v3/forecast/*` (new) + DB tables (in WS0 schema)
 - **Flags**:
   - `V3_FORECAST_TRACKING`
 - **Acceptance**:
@@ -560,7 +575,8 @@ Each workstream below is designed to be **independently implemented** with minim
     - panels may embed a data surface in v1, but must still use server-backed state (layout/pin/preferences)
     - embeds must still route actions through the core verbs (**Examine**, **Monitor**) so they feed WS4/WS6
 - **Owns**:
-  - `frontend/src/modules/*` (new) + `/api/v3/modules/*`.
+  - `watchfuleye/v3/modules/*` (new) + `/api/v3/modules/*`
+  - `frontend/src/v3/modules/*` (new)
 - **Flags**:
   - `V3_MODULES`.
 - **Acceptance**:
@@ -576,7 +592,8 @@ Each workstream below is designed to be **independently implemented** with minim
   - Prompt → ModuleSpec proposal → preview → approve → deploy → versioning.
   - Panel Store: share modules; moderation rules; compatibility checks.
 - **Owns**:
-  - `watchfuleye/panels/*` + `frontend/src/panel-store/*` (new).
+  - `watchfuleye/v3/panel_builder/*` (new)
+  - `frontend/src/v3/panel_store/*` (new)
 - **Flags**:
   - `V3_PANEL_BUILDER`, `V3_PANEL_STORE`.
 - **Acceptance**:
@@ -590,7 +607,8 @@ Each workstream below is designed to be **independently implemented** with minim
   - “Attractor state” geopower visualization (graph‑derived metrics).
   - Country/region dossiers surfaced from map context (e.g., Venezuela, Greenland) with “Examine” + “Monitor”.
 - **Owns**:
-  - `watchfuleye/geo/*` + `frontend/src/map/*`.
+  - `watchfuleye/v3/map_layers/*` (new)
+  - `frontend/src/v3/map_layers/*` (new)
 - **Flags**:
   - `V3_MAP_LAYERS`.
 - **Acceptance**:
