@@ -11,6 +11,12 @@ import psycopg
 class TestForecastOutcomeJob(unittest.TestCase):
     def setUp(self) -> None:
         self.pg_dsn = os.environ.get("PG_DSN")
+        if self.pg_dsn:
+            try:
+                with psycopg.connect(self.pg_dsn):
+                    pass
+            except Exception:
+                self.pg_dsn = None
         # Always enable WS6.1 for these tests (they are explicitly about the job behavior).
         os.environ["V3_FORECAST_TRACKING"] = "true"
 

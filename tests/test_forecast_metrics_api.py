@@ -12,6 +12,13 @@ class TestForecastMetricsApi(unittest.TestCase):
     def setUp(self) -> None:
         # Keep tests isolated from one another via explicit cleanup.
         self.pg_dsn = os.environ.get("PG_DSN")
+        if self.pg_dsn:
+            try:
+                with psycopg.connect(self.pg_dsn):
+                    pass
+            except Exception:
+                # Local dev often runs without Postgres; treat as "not configured".
+                self.pg_dsn = None
 
         # Ensure flags are not leaking across tests.
         os.environ.pop("V3_FORECAST_TRACKING", None)

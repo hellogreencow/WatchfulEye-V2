@@ -22,6 +22,12 @@ class TestForecastOutcomeTrackerSources(unittest.TestCase):
     def setUp(self) -> None:
         self._orig_pg_dsn = os.environ.get("PG_DSN")
         self.pg_dsn = os.environ.get("PG_DSN")
+        if self.pg_dsn:
+            try:
+                with psycopg.connect(self.pg_dsn):
+                    pass
+            except Exception:
+                self.pg_dsn = None
         os.environ.pop("ALPHA_VANTAGE_API_KEY", None)
 
     def tearDown(self) -> None:
