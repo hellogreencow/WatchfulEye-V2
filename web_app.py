@@ -806,6 +806,16 @@ if ENABLE_CHIMERA:
 else:
     logger.info("Chimera API disabled (ENABLE_CHIMERA=false)")
 
+# V3 APIs (flagged, versioned). Default OFF unless explicitly enabled by env flags.
+try:
+    from watchfuleye.v3.entities_api import bp_v3_entities
+
+    app.register_blueprint(bp_v3_entities)
+    logger.info("V3 entities API blueprint registered (/api/v3/entities/*)")
+except Exception as e:
+    # Fail-safe: never take down the app if V3 modules have issues.
+    logger.warning(f"V3 entities API not registered: {e}")
+
 # Set OpenAI API key
 openai.api_key = OPENAI_API_KEY
 
