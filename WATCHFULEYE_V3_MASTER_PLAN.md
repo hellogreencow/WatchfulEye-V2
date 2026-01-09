@@ -295,6 +295,8 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
 - owned paths map (backend + frontend)
 - “hot files” list
 - slice checklist (flags, tests, rollback, staging verify)
+Also see `docs/V3_LOW_CREDIT_AGENT_MODE.md` for:
+- how to ship with weaker agents (bounded slices + explicit owned files + verifier merge gate)
 
 #### WS0 — V3 Contracts + Safety Envelope (MUST DO FIRST)
 - **Why**: without stable interfaces, parallel work will collide.

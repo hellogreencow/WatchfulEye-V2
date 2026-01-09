@@ -94,4 +94,14 @@ Every slice must declare:
   - staging smoke check steps (curl / UI clicks)
 - **Rollback** (almost always: flip flag OFF)
 
+---
+
+## Low-credit / junior-agent mode
+If you run out of credits (or are using a weaker agent), enforce “safe mode”:
+- Only allow **bounded** slices with deterministic acceptance criteria.
+- Provide an explicit owned-files list and explicit “do not touch” list.
+- Force flag gates + response shape tests.
+
+See: `docs/V3_LOW_CREDIT_AGENT_MODE.md`
+
 
