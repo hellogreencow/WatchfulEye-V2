@@ -61,9 +61,11 @@ Use these **owned path conventions** so each WS can ship independently.
 
 ### Backend (Python) V3 paths
 - **WS0**: `contracts/v3/**`, `docs/V3_CONTRACTS.md`, `watchfuleye/v3/**`, `watchfuleye/storage/postgres_schema.py`
-- **WS1 (Reports / AI modal)**: `watchfuleye/v3/reports/**`
-- **WS2 (Custom feeds)**: `watchfuleye/v3/feeds/**`
-- **WS3 (Telegram)**: `watchfuleye/v3/telegram/**`
+- **WS1 (Main feed)**: `watchfuleye/v3/feeds/news/**`
+- **WS1.1 / WS1.2 (Reports / AI modal)**: `watchfuleye/v3/reports/**`
+- **WS2 (Custom feeds)**: `watchfuleye/v3/feeds/custom/**`
+- **WS3 (Telegram feed)**: `watchfuleye/v3/telegram_feed/**`
+- **WS3.1 (Telegram agent)**: `watchfuleye/v3/telegram_agent/**`
 - **WS4 (Investigations / Examine X)**: `watchfuleye/v3/investigations/**`
 - **WS5 (Connectors)**: `watchfuleye/v3/connectors/**`
 - **WS6 (Alerts/Monitoring)**: `watchfuleye/v3/alerts/**`

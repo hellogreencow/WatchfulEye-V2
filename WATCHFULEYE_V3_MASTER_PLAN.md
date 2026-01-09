@@ -362,7 +362,8 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - Dedupe + clustering + ranking (“narrative velocity” optional later).
   - `/api/v3/news/main` (list/search/filter) + `/api/v3/news/item/:id` (detail).
 - **Owns**:
-  - `news_ingest_worker.py` (or `watchfuleye/ingest/news/*` if created) + `fulltext_worker.py` + feed storage tables.
+  - `watchfuleye/v3/feeds/news/*` (new) + feed storage tables
+  - Integration touchpoints (hot; only if required): `news_ingest_worker.py`, `fulltext_worker.py`
 - **Flags**:
   - `V3_MAIN_FEED`.
 - **Acceptance**:
@@ -389,7 +390,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
     - minimum novelty vs previous N reports
     - minimum actionable monitors per report (or explicit reason for none)
 - **Owns**:
-  - `watchfuleye/briefs/*` + report prompt/spec + curation logic
+  - `watchfuleye/v3/reports/*` (new) + report prompt/spec + curation logic
 - **Flags**:
   - `V3_REPORTS_V2`
 - **Acceptance**:
@@ -418,7 +419,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - `/api/v3/news/custom` and `/api/v3/topics/*`.
   - Optional: per-topic scoring + alert hooks.
 - **Owns**:
-  - `watchfuleye/custom_feeds/*` (new) + DB tables for topics and subscriptions.
+  - `watchfuleye/v3/feeds/custom/*` (new) + DB tables for topics and subscriptions
 - **Flags**:
   - `V3_CUSTOM_FEED`.
 - **Acceptance**:
@@ -431,7 +432,8 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - `/api/v3/telegram/reports` (digests) + `/api/v3/telegram/messages` (raw).
   - Citations: reports can cite telegram evidence IDs.
 - **Owns**:
-  - `main.py` / bot pipeline files + new `watchfuleye/ingest/telegram/*`.
+  - `watchfuleye/v3/telegram_feed/*` (new) + bot pipeline integration
+  - Integration touchpoints (hot; only if required): `main.py`
 - **Flags**:
   - `V3_TELEGRAM_FEED`.
 - **Acceptance**:
@@ -464,7 +466,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
     - Prompt‑injection defense: strict tool gating; evidence‑only answers when in RAG mode
     - Cost/latency budgets per request; graceful fallback to “fast reply only”
 - **Owns**:
-  - `watchfuleye/telegram_agent/*` (new) + webhook/poller integration
+  - `watchfuleye/v3/telegram_agent/*` (new) + webhook/poller integration
   - Minimal UI deep-link handler in dashboard (`origin=telegram`)
 - **Flags**:
   - `V3_TELEGRAM_AGENT`, `V3_TELEGRAM_INBOUND`, `V3_TELEGRAM_DEEPLINKS`
@@ -481,7 +483,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - Agent planner → evidence pack → synthesis → red‑team check → final report.
   - Streaming updates for progress (SSE/WebSocket).
 - **Owns**:
-  - `watchfuleye/investigations/*` + job runner integration.
+  - `watchfuleye/v3/investigations/*` + job runner integration.
 - **Flags**:
   - `V3_INVESTIGATIONS`, `V3_REPORTS`.
 - **Acceptance**:
@@ -525,7 +527,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
     - “Asset exposure / scanning” (Censys/Shodan) → **authorized targets only**
     - PII/recon tools → **off by default**
 - **Owns**:
-  - `watchfuleye/connectors/*` + caching layer.
+  - `watchfuleye/v3/connectors/*` + caching layer.
 - **Flags**:
   - `V3_CONNECTORS`, `V3_HIGH_RISK_CONNECTORS`.
 - **Acceptance**:
@@ -538,7 +540,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - Triggers: odds drift, narrative spike, macro print, earthquake threshold, conflict escalation.
   - Notification channels: in‑app + Telegram + email (if configured).
 - **Owns**:
-  - `watchfuleye/alerts/*` + worker/scheduler.
+  - `watchfuleye/v3/alerts/*` + worker/scheduler.
 - **Flags**:
   - `V3_ALERTS`.
 - **Acceptance**:
@@ -556,7 +558,7 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - UX surfaces:
     - “Track record” panel + per-report “how past forecasts performed”
 - **Owns**:
-  - `watchfuleye/forecasting/*` (new) + DB tables (in WS0 schema)
+  - `watchfuleye/v3/forecast/*` (new) + DB tables (in WS0 schema)
 - **Flags**:
   - `V3_FORECAST_TRACKING`
 - **Acceptance**:
@@ -573,7 +575,8 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
     - panels may embed a data surface in v1, but must still use server-backed state (layout/pin/preferences)
     - embeds must still route actions through the core verbs (**Examine**, **Monitor**) so they feed WS4/WS6
 - **Owns**:
-  - `frontend/src/modules/*` (new) + `/api/v3/modules/*`.
+  - `watchfuleye/v3/modules/*` (new) + `/api/v3/modules/*`
+  - `frontend/src/v3/modules/*` (new)
 - **Flags**:
   - `V3_MODULES`.
 - **Acceptance**:
@@ -589,7 +592,8 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - Prompt → ModuleSpec proposal → preview → approve → deploy → versioning.
   - Panel Store: share modules; moderation rules; compatibility checks.
 - **Owns**:
-  - `watchfuleye/panels/*` + `frontend/src/panel-store/*` (new).
+  - `watchfuleye/v3/panel_builder/*` (new)
+  - `frontend/src/v3/panel_store/*` (new)
 - **Flags**:
   - `V3_PANEL_BUILDER`, `V3_PANEL_STORE`.
 - **Acceptance**:
@@ -603,7 +607,8 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
   - “Attractor state” geopower visualization (graph‑derived metrics).
   - Country/region dossiers surfaced from map context (e.g., Venezuela, Greenland) with “Examine” + “Monitor”.
 - **Owns**:
-  - `watchfuleye/geo/*` + `frontend/src/map/*`.
+  - `watchfuleye/v3/map_layers/*` (new)
+  - `frontend/src/v3/map_layers/*` (new)
 - **Flags**:
   - `V3_MAP_LAYERS`.
 - **Acceptance**:
