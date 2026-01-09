@@ -184,6 +184,102 @@ Each workstream owns a dedicated directory slice (or clearly named files). Avoid
 
 ---
 
+### 3.8 Master handoff prompt (EXTREMELY DETAILED; paste into new agent chats)
+
+Copy/paste everything below into a brand‑new agent chat so the agent has **zero ambiguity** about what to do, what not to do, and how to deploy safely.
+
+```text
+YOU ARE OPERATING INSIDE WATCHFULEYE. PRIME DIRECTIVE: Ship V3 without breaking existing production UI/surfaces.
+
+Authoritative plan: WATCHFULEYE_V3_MASTER_PLAN.md (this file). Do not invent new architecture outside it.
+
+Non‑negotiable existing surfaces (NEVER regress/remove):
+- Main News Feed
+- Custom News Feed
+- Telegram Intel Reports
+- Intel Reports
+- AI Analysis Modal
+
+Workstream discipline:
+- One branch/PR = exactly one workstream slice (WS0..WS12).
+- WS0 owns contracts/schemas. If you need a contract change, do it as WS0 (separate PR) or request it.
+- New features must be behind flags `V3_*` and default OFF.
+
+Repo discipline:
+- No direct pushes to master.
+- CI green required.
+- CodeRabbit runs PR‑only (no local pre‑push gate).
+- Auto‑merge disabled by default; only enable when CI + approvals + CodeRabbit are green for low‑risk diffs.
+
+Two working directories (DO NOT MIX):
+1) DEV workspace (feature work): /opt/watchfuleye2
+   - You create branches here.
+   - You never deploy staging from here.
+2) STAGING deploy worktree (master-only): /opt/watchfuleye2-staging
+   - This worktree must stay on origin/master.
+   - You deploy staging from here only.
+
+Safe staging deploy commands (run ONLY in /opt/watchfuleye2-staging):
+- git pull --ff-only origin master
+- sudo systemctl restart watchfuleye-backend-staging
+- sudo systemctl restart watchfuleye-frontend-staging
+
+How master evolves:
+- Feature work merges into master via PRs (sequential order, one slice at a time).
+- Staging is always “whatever is currently on origin/master”, pulled into the staging worktree.
+- If a feature is behind a flag, merging to master does NOT turn it on; staging enables flags explicitly via service env/config.
+
+What “next step” means in this repo:
+- Identify the next workstream slice from this plan.
+- Implement it behind a flag with tests.
+- Push a branch, open PR, resolve CodeRabbit + CI, then merge.
+- After merge: deploy to staging via the worktree; enable flag(s) in staging; validate.
+
+CURRENT STATE (as of this chat):
+- WS0 entity resolution API exists:
+  - Endpoint: POST /api/v3/entities/resolve
+  - Flag gate: V3_ENTITY_IDS (default OFF)
+  - Behavior (flag ON): attempts exact match resolution in Postgres; never hard-fails app if Postgres missing.
+- Postgres schema includes WS0 entity tables:
+  - entities
+  - entity_identifiers
+  - entity_aliases
+  - entity_same_as_edges
+
+CURRENT NEXT SLICE (execute this first unless told otherwise):
+- WS0.4 Seed ISO‑3166 countries + sanctions targets into entities so resolver returns real matches in staging.
+  - Must NOT use external network calls during seeding. Deterministic seed only.
+  - Must NOT hijack existing identifiers in staging (do not silently re-point an identifier owned by another entity).
+
+Acceptance criteria for WS0.4:
+- With V3_ENTITY_IDS=true in staging backend:
+  - q="US", types=["country"] returns at least one match with entity_type="country"
+  - q="<some ofac id>", types=["sanctions_target"] returns at least one match with entity_type="sanctions_target"
+- CI remains green.
+- Rollback is “flag OFF” (no user-visible regression when OFF).
+
+Operational verification steps for agent:
+1) Confirm you are in DEV workspace (/opt/watchfuleye2) before coding.
+2) Confirm git status is clean before creating a branch.
+3) Create a correctly named branch (ws0/* for WS0 work).
+4) Implement changes + add/adjust tests.
+5) Commit with a clear message (scope prefix recommended).
+6) Push branch and open PR using template; fill required sections (Intent, owned files, flags, verification, rollback).
+7) Check PR for:
+   - CI checks (backend + frontend)
+   - CodeRabbit comments (resolve or explicitly justify)
+8) Merge only when green + reviewed.
+9) Deploy staging only from /opt/watchfuleye2-staging via ff-only pull + systemctl restarts.
+10) Enable flags only in staging service env/config; validate endpoints.
+
+Safety constraints:
+- No secrets in repo.
+- No scraping without governance.
+- All “intel claims” must remain evidence-first and auditable.
+```
+
+---
+
 ### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
 Each workstream below is designed to be **independently implemented** with minimal overlap.
 

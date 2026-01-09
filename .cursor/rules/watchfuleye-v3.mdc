@@ -1,9 +1,6 @@
 ---
-description: WatchfulEye V3 build discipline (workstreams, flags, CodeRabbit, push/PR hygiene)
-globs:
-  - "**/*"
+alwaysApply: true
 ---
-
 ## WatchfulEye V3 — Operating Rules (must follow)
 
 ### Prime directive
@@ -29,6 +26,23 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
   - Push branch to origin.
   - Open a PR using the repo template and fill the required sections (briefly).
 - No direct pushes to `master`.
+
+### Staging deploy discipline (must be followed)
+- **Two working directories** (never deploy staging from your dev workspace):
+  - **Dev workspace**: `/opt/watchfuleye2` (you create branches here and do all work here)
+  - **Staging deploy worktree**: `/opt/watchfuleye2-staging` (must track `origin/master` only)
+- **Worktree rule**: staging pulls from `master` worktree and restarts staging services; dev workspace stays on feature branches.
+- **Safe staging deploy commands** (run in `/opt/watchfuleye2-staging`):
+  - `git pull --ff-only origin master`
+  - `sudo systemctl restart watchfuleye-backend-staging`
+  - `sudo systemctl restart watchfuleye-frontend-staging`
+
+### New-chat handoff rule (so fresh agents don’t lose context)
+- When starting a new agent chat, paste:
+  - `WATCHFULEYE_V3_MASTER_PLAN.md` as the single source of truth
+  - current “next workstream slice” (e.g., `WS0.4 seed ISO-3166 + OFAC into entities`)
+  - the staging/dev directory rule above (dev vs worktree)
+  - “CI green required; one workstream per PR; flags default OFF”
 
 ### Watching CodeRabbit without email (agent must support)
 - If Oli asks “check PR #N CodeRabbit”, use GitHub MCP to fetch and summarize:
