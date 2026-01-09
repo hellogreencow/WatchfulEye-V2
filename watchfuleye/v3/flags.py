@@ -1,0 +1,21 @@
+"""Minimal feature flag helpers for V3.
+
+V3 work is shipped behind flags by default to avoid breaking existing production surfaces.
+"""
+
+from __future__ import annotations
+
+import os
+
+
+def _env_truthy(val: str | None) -> bool:
+    if val is None:
+        return False
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_v3_entity_ids_enabled() -> bool:
+    """Gate V3 entity resolution surfaces."""
+    return _env_truthy(os.environ.get("V3_ENTITY_IDS"))
+
+
