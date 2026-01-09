@@ -193,6 +193,61 @@ SCHEMA_STATEMENTS: list[str] = [
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     """,
+
+    # =====================
+    # WS0 (V3): Entity Resolution + Identifiers (minimal schema)
+    # =====================
+    """
+    CREATE TABLE IF NOT EXISTS entities (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL, -- ticker|country|sanctions_target (v1 scope)
+      label TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_entities_type_label ON entities (entity_type, label);",
+
+    """
+    CREATE TABLE IF NOT EXISTS entity_identifiers (
+      id BIGSERIAL PRIMARY KEY,
+      entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      identifier_type TEXT NOT NULL, -- ticker|iso3166|ofac_id|name
+      identifier_value TEXT NOT NULL,
+      confidence REAL NOT NULL DEFAULT 1.0,
+      provenance JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (identifier_type, identifier_value)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_entity_identifiers_entity_id ON entity_identifiers (entity_id);",
+
+    """
+    CREATE TABLE IF NOT EXISTS entity_aliases (
+      id BIGSERIAL PRIMARY KEY,
+      entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      alias TEXT NOT NULL,
+      confidence REAL NOT NULL DEFAULT 0.8,
+      provenance JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (entity_id, alias)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias ON entity_aliases (alias);",
+
+    """
+    CREATE TABLE IF NOT EXISTS entity_same_as_edges (
+      id BIGSERIAL PRIMARY KEY,
+      src_entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      dst_entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      confidence REAL NOT NULL DEFAULT 0.0,
+      conflicted BOOLEAN NOT NULL DEFAULT FALSE,
+      provenance JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (src_entity_id, dst_entity_id)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_entity_same_as_src ON entity_same_as_edges (src_entity_id);",
 ]
 
 

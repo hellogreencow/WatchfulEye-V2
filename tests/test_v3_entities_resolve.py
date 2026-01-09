@@ -1,8 +1,38 @@
 import os
 import unittest
 
+import psycopg
+
+from watchfuleye.storage.postgres_schema import ensure_postgres_schema
+
 
 class TestV3EntitiesResolve(unittest.TestCase):
+    PG_DSN = os.environ.get("PG_DSN", "dbname=watchfuleye user=watchful password=watchfulpass host=localhost port=5432")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        os.environ["PG_DSN"] = cls.PG_DSN
+        ensure_postgres_schema(cls.PG_DSN)
+
+        # Seed one entity + identifier for exact match testing.
+        with psycopg.connect(cls.PG_DSN, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO entities (id, entity_type, label)
+                    VALUES ('ent_ticker_aapl', 'ticker', 'Apple Inc')
+                    ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label
+                    """
+                )
+                cur.execute(
+                    """
+                    INSERT INTO entity_identifiers (entity_id, identifier_type, identifier_value, confidence, provenance)
+                    VALUES ('ent_ticker_aapl', 'ticker', 'AAPL', 1.0, '{"source_system":"test"}'::jsonb)
+                    ON CONFLICT (identifier_type, identifier_value) DO UPDATE
+                    SET entity_id = EXCLUDED.entity_id
+                    """
+                )
+
     def setUp(self) -> None:
         # Ensure default OFF unless test explicitly enables.
         os.environ.pop("V3_ENTITY_IDS", None)
@@ -32,7 +62,13 @@ class TestV3EntitiesResolve(unittest.TestCase):
         self.assertEqual(data.get("q"), "AAPL")
         self.assertEqual(data.get("k"), 5)
         self.assertEqual(data.get("types"), ["ticker"])
-        self.assertEqual(data.get("matches"), [])
+        # Should return our seeded exact match via Postgres.
+        matches = data.get("matches")
+        self.assertIsInstance(matches, list)
+        self.assertGreaterEqual(len(matches), 1)
+        self.assertEqual(matches[0].get("entity_id"), "ent_ticker_aapl")
+        self.assertEqual(matches[0].get("entity_type"), "ticker")
+        self.assertIn("confidence", matches[0])
 
 
 if __name__ == "__main__":
