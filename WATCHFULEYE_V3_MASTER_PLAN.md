@@ -253,15 +253,21 @@ CURRENT STATE (as of this chat):
   - `systemctl cat watchfuleye-backend-staging.service` should show `WorkingDirectory=/opt/watchfuleye2-staging`
 
 CURRENT NEXT SLICE (execute this first unless told otherwise):
-- WS4.0 “Examine X” MVP skeleton (flagged): create the minimal investigation/run loop that produces a consolidated report (even if v1 uses existing news/RAG as evidence).
+- **WS4.0 COMPLETE** ✅ (merged PR #19 + #21)
+- Next: **WS4.1** — Enhance Examine runner with better evidence ranking, multi-source connectors, and structured predictions with confidence intervals.
 
-Acceptance criteria for WS4.0:
-- Flagged endpoint exists (default OFF) and cannot break V1:
-  - Suggested: `V3_EXAMINE_MVP` and `POST /api/v3/examine`
-- When flag OFF: endpoint is hidden (404).
-- When flag ON: endpoint returns a stable investigation id + trace id, and produces a minimal report payload (even if first version is stubbed).
-- Tests exist for flag OFF/ON behavior.
-- Rollback is “flag OFF” (no user-visible regression when OFF).
+Completed slices:
+- WS0.1-WS0.6: Entity resolution + seeding (PRs #8-#15)
+- WS4.0: Examine MVP skeleton (backend + frontend UI, PRs #19 + #21)
+- Docs: Laptop clone workflow rule (PR #23)
+
+Acceptance criteria for WS4.0 (COMPLETED):
+- ✅ Flagged endpoint exists (`V3_EXAMINE_MVP` and `POST /api/v3/examine`)
+- ✅ When flag OFF: endpoint returns 404
+- ✅ When flag ON: endpoint returns investigation_id + report_id + evidence-first report
+- ✅ Frontend UI at `/v3/examine` (behind `REACT_APP_V3_EXAMINE_UI` flag)
+- ✅ Tests exist for flag OFF/ON behavior
+- ✅ Rollback is "flag OFF" (no user-visible regression when OFF)
 
 Operational verification steps for agent:
 1) Confirm you are in DEV workspace (/opt/watchfuleye2) before coding.
