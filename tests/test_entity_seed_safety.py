@@ -14,6 +14,13 @@ class TestEntitySeedSafety(unittest.TestCase):
     def setUpClass(cls) -> None:
         ensure_postgres_schema(cls.PG_DSN)
 
+    def tearDown(self) -> None:
+        # Clean up any rows created by this test so re-runs are isolated.
+        with psycopg.connect(self.PG_DSN, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM entity_identifiers WHERE entity_id = 'country_manual_us'")
+                cur.execute("DELETE FROM entities WHERE id = 'country_manual_us'")
+
     def test_seeding_does_not_hijack_existing_identifier(self) -> None:
         # Create a pre-existing identifier owned by a non-seed source.
         with psycopg.connect(self.PG_DSN, autocommit=True) as conn:

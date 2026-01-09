@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import sys
 
 from watchfuleye.v3.entity_seeds import (
     download_ofac_sdn_csv,
@@ -42,17 +43,36 @@ def main() -> int:
     if not args.pg_dsn:
         raise SystemExit("ERROR: missing --pg-dsn (or PG_DSN env var)")
 
+    failures: list[str] = []
+
     if not args.no_iso:
-        iso_path = Path(args.iso_json)
-        n = seed_iso3166_all_from_json(args.pg_dsn, json_path=iso_path)
-        print(f"seed_iso3166_all_from_json={n}")
+        try:
+            iso_path = Path(args.iso_json)
+            n = seed_iso3166_all_from_json(args.pg_dsn, json_path=iso_path)
+            print(f"seed_iso3166_all_from_json={n}")
+        except Exception as e:
+            failures.append(f"iso: {e}")
+            print(f"ERROR: ISO seed failed: {e}", file=sys.stderr)
 
     if not args.no_ofac:
-        cache_dir = Path(args.ofac_cache_dir)
-        csv_path, final_url, digest = download_ofac_sdn_csv(cache_dir=cache_dir, url=args.ofac_url)
-        n = seed_ofac_sdn_from_csv_path(args.pg_dsn, csv_path=csv_path, source_url=final_url, sha256_hex=digest)
-        print(f"seed_ofac_sdn_from_csv_path={n} (source={final_url}, sha256={digest})")
+        try:
+            cache_dir = Path(args.ofac_cache_dir)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            # Writability check (avoid downloading then failing to cache).
+            test_path = cache_dir / ".write_test"
+            test_path.write_text("ok", encoding="utf-8")
+            test_path.unlink(missing_ok=True)
 
+            csv_path, final_url, digest = download_ofac_sdn_csv(cache_dir=cache_dir, url=args.ofac_url)
+            n = seed_ofac_sdn_from_csv_path(args.pg_dsn, csv_path=csv_path, source_url=final_url, sha256_hex=digest)
+            print(f"seed_ofac_sdn_from_csv_path={n} (source={final_url}, sha256={digest})")
+        except Exception as e:
+            failures.append(f"ofac: {e}")
+            print(f"ERROR: OFAC seed failed: {e}", file=sys.stderr)
+
+    if failures:
+        print(f"FAILED: {', '.join(failures)}", file=sys.stderr)
+        return 2
     return 0
 
 

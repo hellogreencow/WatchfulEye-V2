@@ -6,15 +6,20 @@ This module is intentionally simple and deterministic.
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import io
 from hashlib import sha256
+import json
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import psycopg
 import requests
 from psycopg.types.json import Jsonb
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from watchfuleye.storage.postgres_schema import ensure_postgres_schema
 
@@ -152,8 +157,6 @@ def seed_iso3166_all_from_json(pg_dsn: str, *, json_path: Path) -> int:
 
     Returns: number of country entities processed (not DB rows).
     """
-    import json
-
     ensure_postgres_schema(pg_dsn)
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     if not isinstance(payload, list):
@@ -215,14 +218,14 @@ class OfacSdnRow:
 
 def parse_ofac_sdn_csv_text(csv_text: str) -> list[OfacSdnRow]:
     """Parse OFAC SDN CSV into a minimal row structure (no network)."""
-    import csv
-    import io
-
     out: list[OfacSdnRow] = []
     reader = csv.reader(io.StringIO(csv_text))
     for row in reader:
         # Expected columns: ent_num, sdn_name, sdn_type, program, ... (rest ignored)
         if not row or len(row) < 4:
+            continue
+        # Optional header row
+        if (row[0] or "").strip().lower() == "ent_num":
             continue
         ent_num = (row[0] or "").strip()
         name = (row[1] or "").strip()
@@ -237,10 +240,16 @@ def parse_ofac_sdn_csv_text(csv_text: str) -> list[OfacSdnRow]:
 def download_ofac_sdn_csv(*, cache_dir: Path, url: str = "https://www.treasury.gov/ofac/downloads/sdn.csv") -> tuple[Path, str, str]:
     """Download OFAC SDN CSV to cache_dir and return (path, final_url, sha256_hex)."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    r = requests.get(url, timeout=60)
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    r = session.get(url, timeout=60)
     r.raise_for_status()
     final_url = str(r.url)
     content = r.content
+    # Basic content sanity (operator tool, but avoid caching HTML error pages).
+    if b"," not in content or b"\n" not in content or len(content) < 1024:
+        raise ValueError(f"OFAC SDN download did not look like CSV (bytes={len(content)}, url={final_url})")
     digest = sha256(content).hexdigest()
     out_path = cache_dir / f"ofac_sdn_{digest[:12]}.csv"
     if not out_path.exists():
