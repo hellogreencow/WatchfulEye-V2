@@ -41,6 +41,18 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
   - `sudo systemctl restart watchfuleye-backend-staging`
   - `sudo systemctl restart watchfuleye-frontend-staging`
 
+### Production deploy discipline (must be followed)
+- **Never run production from the dev workspace**. Prod must be isolated from in-progress branches.
+- **Production deploy worktree**: `/opt/watchfuleye2-prod` (tracks `origin/master` only via local branch `prod/master`).
+- **Prod services must point at prod worktree**:
+  - `watchfuleye-backend.service` → `WorkingDirectory=/opt/watchfuleye2-prod`
+  - `watchfuleye-frontend.service` → `WorkingDirectory=/opt/watchfuleye2-prod/frontend/build`
+- **Safe production deploy commands** (run in `/opt/watchfuleye2-prod`):
+  - `git pull --ff-only origin master`
+  - (frontend updates) `cd frontend && npm ci && npm run build`
+  - `sudo systemctl restart watchfuleye-backend watchfuleye-frontend`
+- **DB safety (critical)**: ensure prod uses an **absolute** `DB_PATH` (e.g. `/opt/watchfuleye2/news_bot.db`) via env file or a systemd override. Relative `DB_PATH=news_bot.db` will create a new empty DB in the worktree and break AI/reporting.
+
 ### New-chat handoff rule (so fresh agents don’t lose context)
 - When starting a new agent chat, paste:
   - `WATCHFULEYE_V3_MASTER_PLAN.md` as the single source of truth
