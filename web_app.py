@@ -293,9 +293,7 @@ try:
     # Postgres-backed article access (Phase 4: hybrid search + better news display)
     from watchfuleye.storage.postgres_articles import PostgresArticleStore
     _pg_articles = PostgresArticleStore(PG_DSN)
-    logger.info(f"PostgresArticleStore initialized successfully with DSN: {PG_DSN[:50]}...")
-except Exception as e:
-    logger.warning(f"Failed to initialize PostgresArticleStore: {e}")
+except Exception:
     _pg_articles = None
 try:
     # Postgres-backed analyses (Global Briefs) (Phase 6)
@@ -2883,9 +2881,7 @@ def get_articles():
             try:
                 bucket = category if category else None
                 articles = _pg_articles.get_recent_articles(limit=limit, bucket=bucket, since_hours=since_hours)
-                logger.debug(f"Fetched {len(articles)} articles from Postgres")
-            except Exception as e:
-                logger.warning(f"Postgres get_recent_articles failed, falling back to SQLite: {e}")
+            except Exception:
                 articles = db.get_recent_articles(
                     limit=limit,
                     category=category,

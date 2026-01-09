@@ -49,7 +49,10 @@ class PostgresAnalysesStore:
                         Jsonb(raw_response),
                     ),
                 )
-                return int(cur.fetchone()[0])
+                row = cur.fetchone()
+                if row is None:
+                    raise RuntimeError("Failed to insert analysis row")
+                return int(row[0])
 
     def get_recent(self, *, limit: int = 10) -> List[Dict[str, Any]]:
         limit = max(1, min(int(limit), 50))
