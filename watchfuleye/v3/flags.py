@@ -19,3 +19,8 @@ def is_v3_entity_ids_enabled() -> bool:
     return _env_truthy(os.environ.get("V3_ENTITY_IDS"))
 
 
+def is_v3_examine_mvp_enabled() -> bool:
+    """Gate the minimal 'Examine X' MVP surface (WS4.0 contract stub lives in WS0)."""
+    return _env_truthy(os.environ.get("V3_EXAMINE_MVP"))
+
+

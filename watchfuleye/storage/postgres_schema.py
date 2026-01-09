@@ -248,6 +248,34 @@ SCHEMA_STATEMENTS: list[str] = [
     );
     """,
     "CREATE INDEX IF NOT EXISTS idx_entity_same_as_src ON entity_same_as_edges (src_entity_id);",
+
+    # =====================
+    # WS0 (V3): Investigations + Reports (contract scaffolding)
+    # =====================
+    """
+    CREATE TABLE IF NOT EXISTS v3_investigations (
+      id TEXT PRIMARY KEY,
+      query TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued', -- queued|running|succeeded|failed
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      trace_id TEXT NOT NULL,
+      meta JSONB
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_v3_investigations_created_at ON v3_investigations (created_at DESC);",
+
+    """
+    CREATE TABLE IF NOT EXISTS v3_reports (
+      id TEXT PRIMARY KEY,
+      investigation_id TEXT NOT NULL REFERENCES v3_investigations(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      content JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_v3_reports_investigation_id ON v3_reports (investigation_id);",
 ]
 
 
