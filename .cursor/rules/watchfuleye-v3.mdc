@@ -27,6 +27,10 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
   - Open a PR using the repo template and fill the required sections (briefly).
 - No direct pushes to `master`.
 
+### Branch creation note (worktree-aware)
+- Because `master` is checked out in the staging worktree, in `/opt/watchfuleye2` create new branches from `origin/master`:
+  - `git fetch origin master && git checkout -b wsX/<slice> origin/master`
+
 ### Staging deploy discipline (must be followed)
 - **Two working directories** (never deploy staging from your dev workspace):
   - **Dev workspace**: `/opt/watchfuleye2` (you create branches here and do all work here)
