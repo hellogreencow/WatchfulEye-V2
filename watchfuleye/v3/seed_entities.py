@@ -10,6 +10,8 @@ import argparse
 import os
 from pathlib import Path
 import sys
+import tempfile
+from urllib.parse import urlparse
 
 from watchfuleye.v3.entity_seeds import (
     download_ofac_sdn_csv,
@@ -19,7 +21,7 @@ from watchfuleye.v3.entity_seeds import (
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="WS0 seed runner (ISO-3166 + OFAC SDN) for V3 entity resolution.")
     ap.add_argument("--pg-dsn", default=os.environ.get("PG_DSN", ""), help="Postgres DSN (or set PG_DSN).")
     ap.add_argument(
         "--iso-json",
@@ -36,18 +38,34 @@ def main() -> int:
         default="https://www.treasury.gov/ofac/downloads/sdn.csv",
         help="OFAC SDN CSV URL (redirects allowed).",
     )
+    ap.add_argument(
+        "--allow-non-https-ofac-url",
+        action="store_true",
+        help="Allow a non-HTTPS --ofac-url (unsafe; explicit override).",
+    )
     ap.add_argument("--no-iso", action="store_true", help="Skip ISO seeding.")
     ap.add_argument("--no-ofac", action="store_true", help="Skip OFAC seeding.")
     args = ap.parse_args()
 
     if not args.pg_dsn:
-        raise SystemExit("ERROR: missing --pg-dsn (or PG_DSN env var)")
+        print("ERROR: missing --pg-dsn (or PG_DSN env var)", file=sys.stderr)
+        return 2
+
+    iso_path = Path(args.iso_json)
+    if not args.no_iso and not iso_path.exists():
+        print(f"ERROR: --iso-json does not exist: {iso_path}", file=sys.stderr)
+        return 2
+
+    if not args.no_ofac:
+        parsed = urlparse(args.ofac_url)
+        if parsed.scheme != "https" and not args.allow_non_https_ofac_url:
+            print(f"ERROR: --ofac-url must be https (got: {args.ofac_url}). Use --allow-non-https-ofac-url to override.", file=sys.stderr)
+            return 2
 
     failures: list[str] = []
 
     if not args.no_iso:
         try:
-            iso_path = Path(args.iso_json)
             n = seed_iso3166_all_from_json(args.pg_dsn, json_path=iso_path)
             print(f"seed_iso3166_all_from_json={n}")
         except Exception as e:
@@ -59,9 +77,9 @@ def main() -> int:
             cache_dir = Path(args.ofac_cache_dir)
             cache_dir.mkdir(parents=True, exist_ok=True)
             # Writability check (avoid downloading then failing to cache).
-            test_path = cache_dir / ".write_test"
-            test_path.write_text("ok", encoding="utf-8")
-            test_path.unlink(missing_ok=True)
+            with tempfile.NamedTemporaryFile(prefix=".write_test_", dir=cache_dir, delete=True) as tf:
+                tf.write(b"ok")
+                tf.flush()
 
             csv_path, final_url, digest = download_ofac_sdn_csv(cache_dir=cache_dir, url=args.ofac_url)
             n = seed_ofac_sdn_from_csv_path(args.pg_dsn, csv_path=csv_path, source_url=final_url, sha256_hex=digest)
