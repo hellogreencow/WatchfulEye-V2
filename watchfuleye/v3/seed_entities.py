@@ -23,7 +23,7 @@ def main() -> int:
     ap.add_argument("--pg-dsn", default=os.environ.get("PG_DSN", ""), help="Postgres DSN (or set PG_DSN).")
     ap.add_argument(
         "--iso-json",
-        default=str(Path(__file__).with_suffix("").parent / "data" / "iso3166_all.json"),
+        default=str(Path(__file__).parent / "data" / "iso3166_all.json"),
         help="Path to ISO-3166 JSON dataset (checked into repo).",
     )
     ap.add_argument(
