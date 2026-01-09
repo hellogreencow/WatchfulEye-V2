@@ -11,6 +11,7 @@ Real resolver + persistence ships in later WS0 slices.
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any, Literal, TypedDict
 
@@ -61,6 +62,60 @@ def resolve_entity():
 
     # Stub: return empty match set with trace ID for auditability.
     trace_id = str(uuid.uuid4())
-    return jsonify({"matches": [], "trace_id": trace_id, "q": q, "k": k, "types": types}), 200
+
+    # Minimal WS0.3 behavior: attempt exact-match resolution via Postgres, but never fail the app.
+    matches: list[dict[str, Any]] = []
+    try:
+        import psycopg
+        from watchfuleye.storage.postgres_schema import ensure_postgres_schema
+
+        pg_dsn = os.environ.get("PG_DSN")
+        if pg_dsn:
+            ensure_postgres_schema(pg_dsn)
+            with psycopg.connect(pg_dsn) as conn:
+                with conn.cursor() as cur:
+                    q_norm = q.strip()
+                    # Simple normalizations:
+                    # - ticker: uppercase
+                    # - country: uppercase for ISO codes; otherwise keep as-is (we'll store names as given)
+                    candidates: list[tuple[str, str]] = []
+                    if "ticker" in types:
+                        candidates.append(("ticker", q_norm.upper()))
+                    if "country" in types:
+                        if len(q_norm) in (2, 3) and q_norm.isalpha():
+                            candidates.append(("iso3166", q_norm.upper()))
+                        candidates.append(("name", q_norm))
+                    if "sanctions_target" in types:
+                        candidates.append(("ofac_id", q_norm))
+                        candidates.append(("name", q_norm))
+
+                    for (id_type, id_value) in candidates:
+                        cur.execute(
+                            """
+                            SELECT e.id, e.entity_type, e.label, i.confidence, i.provenance
+                            FROM entity_identifiers i
+                            JOIN entities e ON e.id = i.entity_id
+                            WHERE i.identifier_type = %s AND i.identifier_value = %s
+                            LIMIT %s
+                            """,
+                            (id_type, id_value, k),
+                        )
+                        for (eid, etype, label, conf, prov) in cur.fetchall():
+                            matches.append(
+                                {
+                                    "entity_id": str(eid),
+                                    "entity_type": str(etype),
+                                    "label": str(label),
+                                    "confidence": float(conf) if conf is not None else 0.0,
+                                    "provenance": prov if isinstance(prov, dict) else (prov or {}),
+                                }
+                            )
+                        if matches:
+                            break
+    except Exception:
+        # If Postgres/psycopg isn't available, we fall back to stub.
+        matches = []
+
+    return jsonify({"matches": matches[:k], "trace_id": trace_id, "q": q, "k": k, "types": types}), 200
 
 
