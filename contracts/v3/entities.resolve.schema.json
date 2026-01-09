@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://watchfuleye.us/contracts/v3/entities.resolve.schema.json",
+  "title": "V3 Entity Resolve Request",
+  "type": "object",
+  "required": ["q"],
+  "properties": {
+    "q": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free-text query or identifier (ticker/country/sanctions target)."
+    },
+    "k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10,
+      "description": "Max number of matches to return."
+    },
+    "types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["ticker", "country", "sanctions_target"]
+      },
+      "minItems": 1,
+      "default": ["ticker", "country", "sanctions_target"]
+    }
+  },
+  "additionalProperties": false
+}
+
+
