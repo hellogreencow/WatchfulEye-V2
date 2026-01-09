@@ -9,11 +9,13 @@ import { NewsPage } from './components/landing/NewsPage';
 import { Login } from './components/landing/Login';
 import { ManifestoSection } from './components/landing/ManifestoSection';
 import { AuthProvider } from './Dashboard';
+import { V3ExaminePage } from './v3/examine/ExaminePage';
 
 function App() {
   // IMPORTANT: The app must remain functional even if a build is accidentally produced with
   // REACT_APP_FIGMA_MODE enabled. Figma preview must never take over the homepage.
   const isFigmaMode = process.env.REACT_APP_FIGMA_MODE === 'true';
+  const isV3ExamineUI = process.env.REACT_APP_V3_EXAMINE_UI === 'true';
   // Don't check auth_token here - let Dashboard handle its own auth
   // This ensures landing page always shows for unauthenticated users
   const hasAuthToken = !!localStorage.getItem('auth_token');
@@ -39,6 +41,9 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/chimera" element={hasAuthToken ? <ChimeraCockpit /> : <Navigate to="/login" replace />} />
           
+          {/* V3 Examine (if enabled) */}
+          {isV3ExamineUI && <Route path="/v3/examine" element={<V3ExaminePage />} />}
+
           {/* Figma Preview (if enabled) */}
           {isFigmaMode && <Route path="/figma-preview" element={<FigmaPreview />} />}
           
