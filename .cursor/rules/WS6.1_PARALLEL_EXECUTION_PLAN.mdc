@@ -1,0 +1,719 @@
+---
+alwaysApply: true
+---
+## WS6.1 — Forecast Accountability: PARALLEL EXECUTION PLAN 🔥
+
+### Purpose
+**Sequential in merge, parallel in execution.** Attack WS6.1 from every angle simultaneously with zero conflicts. This is the **single biggest differentiator** — we ship this perfectly.
+
+---
+
+## EXECUTION PHILOSOPHY
+
+**Principle:** Methodical, Surgical, Revolutionary
+
+```
+Sequential Thinking → Parallel Execution → Sequential Validation → Sequential Merge
+```
+
+**Why Parallel:**
+- 2-3 week timeline is aggressive
+- Independent components can be built simultaneously
+- Reduces bottlenecks, maximizes throughput
+- Each component has clear acceptance criteria
+
+**Why Sequential Validation:**
+- Integration testing requires components to exist
+- End-to-end flow requires all pieces working
+- Merge order prevents conflicts (backend → frontend)
+
+---
+
+## WORKSTREAM DECOMPOSITION (8 Parallel Tasks)
+
+### **TASK 1: Database Schema** (Backend, Foundational)
+**Owner:** Agent 1 (Database Specialist)
+**Branch:** `ws6.1/forecast-schema`
+**Priority:** P0 (blocks all other backend tasks)
+**Timeline:** 2-3 days
+
+**Deliverables:**
+1. Add to `watchfuleye/storage/postgres_schema.py`:
+   - `forecasts` table (claim, probability, horizon, entities, evidence, outcome)
+   - `forecast_updates` table (audit trail)
+   - Indexes on: horizon_date, outcome_status, entity_ids, tags
+2. Migration script (if needed)
+3. Tests: `tests/test_forecast_schema.py`
+   - Schema creation succeeds
+   - Indexes exist
+   - Foreign keys work (references v3_reports)
+
+**Acceptance Criteria:**
+- [ ] `forecasts` table created with all fields
+- [ ] `forecast_updates` table created
+- [ ] Indexes created (verified via `\d forecasts` in psql)
+- [ ] Tests pass: schema creation, constraint validation
+- [ ] No breaking changes to existing schema
+
+**Owned Files:**
+- `watchfuleye/storage/postgres_schema.py` (APPEND ONLY, don't modify existing)
+- `tests/test_forecast_schema.py` (NEW)
+
+**NOT Touched:**
+- Any other files
+
+**Flag:** None (schema changes are internal)
+
+**Rollback:** Drop tables (safe, no prod data yet)
+
+---
+
+### **TASK 2: Forecast Extraction** (Backend, Core Logic)
+**Owner:** Agent 2 (NLP/Extraction Specialist)
+**Branch:** `ws6.1/forecast-extractor`
+**Priority:** P1 (depends on TASK 1 schema)
+**Timeline:** 3-4 days
+
+**Deliverables:**
+1. Create `watchfuleye/v3/forecast/extractor.py`:
+   - `extract_forecasts_from_report()` function
+   - Parse predictions section of report content
+   - Extract probability (explicit or inferred, 0.0-1.0)
+   - Extract horizon (days, or infer from context: "within 30 days")
+   - Normalize claim text
+2. Integrate into `watchfuleye/v3/examine_api.py`:
+   - After report creation, call extractor
+   - Insert forecasts into DB (via psycopg)
+3. Tests: `tests/test_forecast_extractor.py`
+   - Extract explicit probabilities ("70% chance")
+   - Extract implicit probabilities ("likely" = 0.65-0.75)
+   - Extract horizons ("within 30 days" = 30)
+   - Handle malformed inputs gracefully
+
+**Acceptance Criteria:**
+- [ ] `extract_forecasts_from_report()` implemented
+- [ ] Extracts probabilities with 90%+ accuracy on test data
+- [ ] Extracts horizons with 85%+ accuracy
+- [ ] Integrated into examine_api.py (after report creation)
+- [ ] Tests pass: various prediction formats
+- [ ] No regressions: examine API still works without forecasts
+
+**Owned Files:**
+- `watchfuleye/v3/forecast/__init__.py` (NEW)
+- `watchfuleye/v3/forecast/extractor.py` (NEW)
+- `watchfuleye/v3/examine_api.py` (EDIT, add extraction call)
+- `tests/test_forecast_extractor.py` (NEW)
+
+**NOT Touched:**
+- `watchfuleye/v3/examine_api.py` return signature (don't break existing)
+- Other v3 modules
+
+**Flag:** `V3_FORECAST_TRACKING` (gate forecast insertion, not extraction logic)
+
+**Rollback:** Set flag OFF, forecast insertion skipped
+
+---
+
+### **TASK 3: Outcome Tracker (Markets)** (Backend, Connector Integration)
+**Owner:** Agent 3 (Markets Data Specialist)
+**Branch:** `ws6.1/outcome-tracker-markets`
+**Priority:** P2 (can start after TASK 1, parallel with TASK 2)
+**Timeline:** 4-5 days
+
+**Deliverables:**
+1. Create `watchfuleye/v3/forecast/outcome_tracker.py`:
+   - `measure_forecast_outcome()` function (main entry point)
+   - `measure_via_market_data()` function
+   - Fetch price data from Yahoo Finance API (or Alpha Vantage fallback)
+   - Evaluate market claims ("AAPL closes above $180 by Jan 31")
+   - Update forecast outcome_status, outcome_result, outcome_confidence
+2. Scheduled job (cron or worker):
+   - Run daily: check forecasts where `horizon_date <= today` and `outcome_status = 'pending'`
+   - Measure outcomes, update DB
+3. Tests: `tests/test_outcome_tracker_markets.py`
+   - Market forecast measurement works
+   - Handles API failures gracefully (fallback, retry)
+   - Updates DB correctly
+
+**Acceptance Criteria:**
+- [ ] `measure_via_market_data()` implemented
+- [ ] Fetches real price data (Yahoo Finance or Alpha Vantage)
+- [ ] Evaluates claims against actual prices
+- [ ] Updates forecast outcome fields in DB
+- [ ] Scheduled job runs daily (verify via logs)
+- [ ] Tests pass: various market forecast formats
+
+**Owned Files:**
+- `watchfuleye/v3/forecast/outcome_tracker.py` (NEW)
+- `scripts/workers/forecast_outcome_job.py` (NEW, scheduled job)
+- `tests/test_outcome_tracker_markets.py` (NEW)
+
+**NOT Touched:**
+- Existing workers/schedulers
+- Other v3 modules
+
+**Flag:** `V3_FORECAST_TRACKING` (gate scheduled job execution)
+
+**Rollback:** Set flag OFF, job doesn't run
+
+---
+
+### **TASK 4: Outcome Tracker (Events)** (Backend, Event Feed Integration)
+**Owner:** Agent 4 (Event Data Specialist)
+**Branch:** `ws6.1/outcome-tracker-events`
+**Priority:** P2 (can start after TASK 1, parallel with TASK 2 & TASK 3)
+**Timeline:** 4-5 days
+
+**Deliverables:**
+1. Extend `watchfuleye/v3/forecast/outcome_tracker.py`:
+   - `measure_via_event_feeds()` function
+   - Fetch events from GDELT, news articles, ACLED (if available)
+   - Evaluate event claims ("conflict escalation in Gaza within 14 days")
+   - Use LLM for nuanced assessment (GPT-4 or Claude)
+   - Update forecast outcome fields
+2. Tests: `tests/test_outcome_tracker_events.py`
+   - Event forecast measurement works
+   - Handles ambiguous outcomes (outcome_status = 'inconclusive')
+   - LLM assessment is reasonable (confidence scoring)
+
+**Acceptance Criteria:**
+- [ ] `measure_via_event_feeds()` implemented
+- [ ] Fetches events from at least 1 source (GDELT or news)
+- [ ] LLM evaluates claims with confidence score
+- [ ] Updates forecast outcome fields in DB
+- [ ] Tests pass: various event forecast formats
+
+**Owned Files:**
+- `watchfuleye/v3/forecast/outcome_tracker.py` (EDIT, add event measurement)
+- `tests/test_outcome_tracker_events.py` (NEW)
+
+**NOT Touched:**
+- Market measurement logic (TASK 3 owns that)
+- Other v3 modules
+
+**Flag:** `V3_FORECAST_TRACKING`
+
+**Rollback:** Set flag OFF
+
+---
+
+### **TASK 5: Accuracy Scorer** (Backend, Math/Statistics)
+**Owner:** Agent 5 (Statistics Specialist)
+**Branch:** `ws6.1/accuracy-scorer`
+**Priority:** P2 (can start after TASK 1, parallel with TASK 2-4)
+**Timeline:** 2-3 days
+
+**Deliverables:**
+1. Create `watchfuleye/v3/forecast/scorer.py`:
+   - `calculate_brier_score()` function
+   - `calculate_log_score()` function
+   - `assign_calibration_bin()` function
+   - `calculate_calibration_curve()` function (aggregate across forecasts)
+2. Integrate into outcome tracker:
+   - After outcome is measured, calculate scores
+   - Update forecast `brier_score`, `log_score`, `calibration_bin` fields
+3. Tests: `tests/test_forecast_scorer.py`
+   - Brier score calculation correct (compare to known values)
+   - Log score calculation correct
+   - Calibration curve calculation correct
+   - Edge cases: probability = 0.0, 1.0
+
+**Acceptance Criteria:**
+- [ ] Brier score implementation verified against test cases
+- [ ] Log score implementation verified
+- [ ] Calibration curve calculation correct
+- [ ] Integrated into outcome tracker (scores calculated on resolution)
+- [ ] Tests pass: all scoring functions
+
+**Owned Files:**
+- `watchfuleye/v3/forecast/scorer.py` (NEW)
+- `watchfuleye/v3/forecast/outcome_tracker.py` (EDIT, call scorer after measurement)
+- `tests/test_forecast_scorer.py` (NEW)
+
+**NOT Touched:**
+- Measurement logic (TASK 3 & 4 own that)
+- Other v3 modules
+
+**Flag:** None (internal calculation)
+
+**Rollback:** N/A (pure calculation, no side effects)
+
+---
+
+### **TASK 6: Metrics API** (Backend, API Layer)
+**Owner:** Agent 6 (API Specialist)
+**Branch:** `ws6.1/metrics-api`
+**Priority:** P3 (depends on TASK 1, 2, 5; can start when schema + scorer exist)
+**Timeline:** 3-4 days
+
+**Deliverables:**
+1. Create `watchfuleye/v3/forecast/metrics_api.py`:
+   - Blueprint: `bp_v3_forecast`
+   - Endpoint: `GET /api/v3/forecast/metrics`
+   - Query forecasts from DB, aggregate metrics
+   - Return: overall Brier, calibration curve, hit rates by horizon, domain breakdown
+2. Register blueprint in `watchfuleye/v3/api_registry.py`
+3. Tests: `tests/test_forecast_metrics_api.py`
+   - Endpoint returns 200 when flag ON
+   - Endpoint returns 404 when flag OFF
+   - Metrics calculation correct
+   - Handles empty forecasts table gracefully
+
+**Acceptance Criteria:**
+- [ ] `GET /api/v3/forecast/metrics` endpoint exists
+- [ ] Flag `V3_FORECAST_TRACKING` gates endpoint
+- [ ] Returns correct metrics structure (JSON schema validation)
+- [ ] Calculates overall Brier, calibration, hit rates
+- [ ] Tests pass: flag ON/OFF, various data scenarios
+
+**Owned Files:**
+- `watchfuleye/v3/forecast/metrics_api.py` (NEW)
+- `watchfuleye/v3/api_registry.py` (EDIT, register blueprint)
+- `watchfuleye/v3/flags.py` (EDIT, add `is_v3_forecast_tracking_enabled()`)
+- `tests/test_forecast_metrics_api.py` (NEW)
+
+**NOT Touched:**
+- Other API endpoints
+- Frontend
+
+**Flag:** `V3_FORECAST_TRACKING`
+
+**Rollback:** Set flag OFF, endpoint returns 404
+
+---
+
+### **TASK 7: Frontend Accuracy Panel** (Frontend, UI Component)
+**Owner:** Agent 7 (React Specialist)
+**Branch:** `ws6.1/accuracy-panel-ui`
+**Priority:** P4 (depends on TASK 6 API)
+**Timeline:** 3-4 days
+
+**Deliverables:**
+1. Create `frontend/src/v3/forecast/AccuracyPanel.tsx`:
+   - React component, uses shadcn Card
+   - Fetches data from `GET /api/v3/forecast/metrics`
+   - Displays: Overall accuracy, Brier score, calibration chart, hit rates
+2. Create `frontend/src/v3/forecast/CalibrationChart.tsx`:
+   - Chart component (use Recharts or similar)
+   - X-axis: Expected probability (0-100%)
+   - Y-axis: Observed frequency (0-100%)
+   - Perfect calibration = diagonal line
+3. Create `frontend/src/v3/forecast/api.ts`:
+   - `fetchForecastMetrics()` function
+4. Tests: `frontend/src/v3/forecast/AccuracyPanel.test.tsx`
+   - Component renders with mock data
+   - Handles loading state
+   - Handles error state
+   - Handles empty data (no forecasts yet)
+
+**Acceptance Criteria:**
+- [ ] AccuracyPanel component renders correctly
+- [ ] Fetches metrics from API
+- [ ] Displays Brier score, calibration chart, hit rates
+- [ ] Responsive design (mobile + desktop)
+- [ ] Tests pass: rendering, loading, error states
+
+**Owned Files:**
+- `frontend/src/v3/forecast/AccuracyPanel.tsx` (NEW)
+- `frontend/src/v3/forecast/CalibrationChart.tsx` (NEW)
+- `frontend/src/v3/forecast/api.ts` (NEW)
+- `frontend/src/v3/forecast/types.ts` (NEW)
+- `frontend/src/v3/forecast/AccuracyPanel.test.tsx` (NEW)
+
+**NOT Touched:**
+- Existing frontend components
+- Dashboard.tsx (integration happens later)
+
+**Flag:** `REACT_APP_V3_FORECAST_TRACKING`
+
+**Rollback:** Don't render component if flag OFF
+
+---
+
+### **TASK 8: Integration & E2E Testing** (Full Stack, QA)
+**Owner:** Agent 8 (Integration Specialist)
+**Branch:** `ws6.1/integration-testing`
+**Priority:** P5 (depends on ALL tasks 1-7)
+**Timeline:** 2-3 days
+
+**Deliverables:**
+1. Integration tests: `tests/integration/test_forecast_e2e.py`
+   - E2E flow: Create investigation → Extract forecasts → Measure outcomes → Calculate scores → Fetch metrics
+   - Test with mock data (don't wait for real outcomes)
+   - Verify DB state at each step
+2. Dashboard integration: `frontend/src/Dashboard.tsx`
+   - Add AccuracyPanel to dashboard (behind flag)
+   - Place in appropriate section (e.g., new "Track Record" tab)
+3. Smoke tests on staging:
+   - Deploy to staging
+   - Enable flags
+   - Create test investigation with predictions
+   - Verify forecasts extracted
+   - Verify metrics API returns data
+   - Verify UI displays correctly
+
+**Acceptance Criteria:**
+- [ ] E2E test passes: full flow works end-to-end
+- [ ] AccuracyPanel integrated into Dashboard (behind flag)
+- [ ] Staging deployment succeeds
+- [ ] Smoke tests pass: API + UI working
+- [ ] No regressions: existing features still work
+
+**Owned Files:**
+- `tests/integration/test_forecast_e2e.py` (NEW)
+- `frontend/src/Dashboard.tsx` (EDIT, add AccuracyPanel)
+- `.cursor/state/current-position.md` (UPDATE with completion)
+
+**NOT Touched:**
+- Core implementation files (TASK 1-7 own those)
+
+**Flag:** `V3_FORECAST_TRACKING` + `REACT_APP_V3_FORECAST_TRACKING`
+
+**Rollback:** Set flags OFF, remove AccuracyPanel from Dashboard
+
+---
+
+## PARALLEL EXECUTION MATRIX
+
+```
+Timeline (Days):  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
+───────────────────────────────────────────────────────────────
+TASK 1 (Schema)       [██]
+TASK 2 (Extractor)       [████]
+TASK 3 (Markets)            [█████]
+TASK 4 (Events)             [█████]
+TASK 5 (Scorer)             [███]
+TASK 6 (API)                      [████]
+TASK 7 (UI)                           [████]
+TASK 8 (Integration)                        [███]
+
+PR Reviews                                       [██]
+Merge to Master                                    [█]
+Staging Deploy                                      [█]
+```
+
+**Critical Path:** TASK 1 → TASK 2 → TASK 6 → TASK 7 → TASK 8 (15 days)
+
+**Parallel Gains:**
+- Without parallelization: ~28 days (sequential)
+- With parallelization: ~15 days (46% faster)
+
+---
+
+## AGENT ASSIGNMENT STRATEGY
+
+### Agent 1: Database Schema (Python, SQL)
+**Skills:** Postgres, schema design, migrations
+**Context:** Read `watchfuleye/storage/postgres_schema.py`, understand existing V3 tables
+**Handoff:** When done, notify Agent 2, 3, 4, 5, 6 (schema ready)
+
+### Agent 2: Forecast Extraction (Python, NLP)
+**Skills:** Text parsing, regex, LLM prompting
+**Context:** Read `watchfuleye/v3/examine_api.py`, understand report structure
+**Depends on:** Agent 1 (schema must exist)
+**Handoff:** When done, notify Agent 6 (extraction logic ready for API)
+
+### Agent 3: Outcome Tracker - Markets (Python, APIs)
+**Skills:** HTTP requests, market data APIs, error handling
+**Context:** Read Yahoo Finance API docs, understand forecast schema
+**Depends on:** Agent 1 (schema must exist)
+**Handoff:** When done, notify Agent 8 (outcome measurement works)
+
+### Agent 4: Outcome Tracker - Events (Python, LLM)
+**Skills:** Event data APIs, LLM prompting, ambiguity handling
+**Context:** Read GDELT docs, understand event forecasts
+**Depends on:** Agent 1 (schema must exist)
+**Handoff:** When done, notify Agent 8 (event measurement works)
+
+### Agent 5: Accuracy Scorer (Python, Statistics)
+**Skills:** Statistics, proper scoring rules, math
+**Context:** Read Brier score formula, understand calibration
+**Depends on:** Agent 1 (schema must exist)
+**Handoff:** When done, notify Agent 3, 4, 6 (scoring logic ready)
+
+### Agent 6: Metrics API (Python, Flask)
+**Skills:** API design, Flask blueprints, SQL queries
+**Context:** Read `watchfuleye/v3/api_registry.py`, understand V3 API patterns
+**Depends on:** Agent 1, 2, 5 (schema, extraction, scoring ready)
+**Handoff:** When done, notify Agent 7 (API ready for frontend)
+
+### Agent 7: Frontend Accuracy Panel (React, TypeScript)
+**Skills:** React, TypeScript, Recharts, shadcn/ui
+**Context:** Read `frontend/src/v3/examine/ExaminePage.tsx`, understand V3 UI patterns
+**Depends on:** Agent 6 (API must exist)
+**Handoff:** When done, notify Agent 8 (UI ready for integration)
+
+### Agent 8: Integration & QA (Full Stack, Testing)
+**Skills:** E2E testing, integration testing, deployment
+**Context:** Read all TASK 1-7 deliverables, understand full flow
+**Depends on:** Agent 1-7 (all components ready)
+**Handoff:** When done, notify team lead (WS6.1 complete, ready for merge)
+
+---
+
+## MERGE STRATEGY (Sequential, Not Parallel)
+
+**Principle:** Merge in dependency order, not completion order.
+
+### Merge Order:
+1. **TASK 1 (Schema)** — Merge first (foundational, no dependencies)
+   - Branch: `ws6.1/forecast-schema`
+   - PR title: "ws6.1: add forecast schema + tables"
+   - Review: 1-2 days
+   - Merge to: `master`
+
+2. **TASK 5 (Scorer)** — Merge second (pure logic, no external deps)
+   - Branch: `ws6.1/accuracy-scorer`
+   - PR title: "ws6.1: add Brier score + calibration calculations"
+   - Review: 1 day
+   - Merge to: `master`
+
+3. **TASK 2 (Extractor)** — Merge third (uses schema, standalone logic)
+   - Branch: `ws6.1/forecast-extractor`
+   - PR title: "ws6.1: extract forecasts from reports"
+   - Review: 1-2 days
+   - Merge to: `master`
+
+4. **TASK 3 & 4 (Outcome Trackers)** — Merge together (both use schema + scorer)
+   - Branch: Rebase both onto `master` after TASK 2 merges
+   - Combined PR: "ws6.1: add outcome tracking (markets + events)"
+   - Review: 2 days
+   - Merge to: `master`
+
+5. **TASK 6 (Metrics API)** — Merge fifth (depends on all backend)
+   - Branch: `ws6.1/metrics-api`
+   - PR title: "ws6.1: add forecast metrics API endpoint"
+   - Review: 1 day
+   - Merge to: `master`
+
+6. **TASK 7 (Frontend UI)** — Merge sixth (depends on API)
+   - Branch: `ws6.1/accuracy-panel-ui`
+   - PR title: "ws6.1: add forecast accuracy panel UI"
+   - Review: 1 day
+   - Merge to: `master`
+
+7. **TASK 8 (Integration)** — Merge last (depends on everything)
+   - Branch: `ws6.1/integration-testing`
+   - PR title: "ws6.1: integrate accuracy panel + E2E tests"
+   - Review: 1 day
+   - Merge to: `master`
+
+**Total Review + Merge Time:** ~10 days (with parallel reviews)
+
+---
+
+## COMMUNICATION PROTOCOL
+
+### Daily Standup (Async, via Git/State Files)
+**Format:** Update `.cursor/state/current-position.md` daily
+
+**Template:**
+```markdown
+### Agent X Progress (YYYY-MM-DD)
+- **Task:** TASK N (Name)
+- **Status:** On track / Blocked / Ahead
+- **Completed Today:** [Specific deliverables]
+- **Tomorrow:** [Next steps]
+- **Blockers:** [Any dependencies waiting]
+- **Handoffs:** [Notify Agent Y that X is ready]
+```
+
+### Handoff Protocol
+**When task is complete:**
+1. Push branch: `git push origin wsX.Y/task-name`
+2. Update state file: Mark task complete, notify downstream agents
+3. Open PR (if independent) OR notify lead for merge sequencing
+
+### Blocker Escalation
+**If blocked:**
+1. Update state file immediately with blocker description
+2. Tag dependencies: "Blocked on: Agent X completing TASK Y"
+3. Switch to supporting another task (if possible)
+
+---
+
+## ACCEPTANCE GATES (Must Pass Before Merge)
+
+### Per-Task Gates:
+- [ ] All deliverables completed
+- [ ] Tests pass locally (100% pass rate)
+- [ ] CI green (backend: ruff, mypy, pytest; frontend: lint, typecheck, test, build)
+- [ ] Code review complete (1+ approval)
+- [ ] CodeRabbit comments addressed or justified
+- [ ] Documentation updated (if needed)
+- [ ] State file updated (mark task complete)
+
+### Integration Gates (TASK 8):
+- [ ] E2E test passes (full flow works)
+- [ ] Staging smoke test passes (real deployment)
+- [ ] No regressions (existing features still work)
+- [ ] Performance acceptable (API latency < 500ms)
+- [ ] Accuracy metrics reasonable (Brier score calculation correct)
+
+### Final Merge Gate (WS6.1 Complete):
+- [ ] All 8 tasks merged to master
+- [ ] Master plan updated (WS6.1 marked complete)
+- [ ] State file updated (next workstream: WS4.1)
+- [ ] Staging deployed and validated
+- [ ] Documentation complete (API docs, usage guide)
+- [ ] Demo video recorded (show Track Record panel)
+
+---
+
+## RISK MITIGATION
+
+### Risk 1: Schema Changes Break Existing Code
+**Mitigation:** APPEND ONLY to postgres_schema.py, never modify existing tables
+
+### Risk 2: Extraction Accuracy Low
+**Mitigation:** Test-driven development, use diverse test cases, iterate on regex/LLM prompts
+
+### Risk 3: Outcome Measurement Fails (API Outages)
+**Mitigation:** Graceful degradation, fallback sources, retry logic, mark as 'inconclusive' if unsure
+
+### Risk 4: Merge Conflicts
+**Mitigation:** Clear file ownership, rebase frequently, merge in dependency order
+
+### Risk 5: Timeline Slippage
+**Mitigation:** Daily progress tracking, early blocker escalation, flexible resource allocation
+
+### Risk 6: Integration Bugs
+**Mitigation:** TASK 8 dedicated to integration, comprehensive E2E tests, staging validation
+
+---
+
+## SUCCESS CRITERIA (WS6.1 Complete)
+
+### Product Metrics:
+- [ ] 100+ forecasts extracted from reports (after 1 week of flag ON)
+- [ ] 10+ forecasts resolved (after 30 days of flag ON)
+- [ ] Avg Brier score calculated (target < 0.25 for MVP)
+- [ ] Calibration curve generated (need 50+ resolved forecasts for statistical significance)
+
+### Technical Metrics:
+- [ ] All 8 tasks merged to master
+- [ ] 0 regressions (existing features still work)
+- [ ] API latency < 500ms (metrics endpoint)
+- [ ] Test coverage > 80% (forecast module)
+- [ ] Zero P0/P1 bugs in staging
+
+### User-Facing Metrics:
+- [ ] Track Record panel visible in dashboard (when flag ON)
+- [ ] Accuracy metrics update daily (via scheduled job)
+- [ ] Users can filter by domain (geopolitics, markets, cyber)
+- [ ] Confidence badges displayed on predictions (0.0-1.0 scale)
+
+---
+
+## WHAT "FUCKING PERFECT" MEANS
+
+### Code Quality:
+- ✅ Every function has a docstring
+- ✅ Every edge case is tested
+- ✅ No magic numbers (all constants named)
+- ✅ No TODOs (all logic implemented)
+- ✅ Type hints on all functions (mypy clean)
+- ✅ No linting errors (ruff clean)
+
+### Architecture:
+- ✅ Single Responsibility Principle (one function, one job)
+- ✅ Clear separation of concerns (DB / logic / API / UI)
+- ✅ Idempotent operations (safe to retry)
+- ✅ Graceful degradation (fail safely, not loudly)
+- ✅ Audit trail (every state change logged)
+
+### Testing:
+- ✅ Unit tests (pure logic, fast)
+- ✅ Integration tests (DB + API)
+- ✅ E2E tests (full flow)
+- ✅ Edge cases covered (empty data, API failures, invalid inputs)
+- ✅ Performance tests (latency, throughput)
+
+### Documentation:
+- ✅ API docs (endpoint specs, request/response schemas)
+- ✅ Usage guide (how to use Track Record panel)
+- ✅ Architecture docs (how components fit together)
+- ✅ Runbook (how to debug issues, restart jobs)
+
+### User Experience:
+- ✅ Fast (< 500ms API latency)
+- ✅ Clear (metrics easy to understand)
+- ✅ Trustworthy (confidence intervals, provenance)
+- ✅ Actionable (users can act on accuracy data)
+
+---
+
+## NEXT IMMEDIATE STEPS (Start Now)
+
+### Step 1: Create Task Branches (Parallel)
+```bash
+# Agent 1
+git fetch origin master
+git checkout -b ws6.1/forecast-schema origin/master
+
+# Agent 2 (wait for Agent 1 to push schema)
+git fetch origin master
+git checkout -b ws6.1/forecast-extractor origin/master
+
+# Agent 3
+git fetch origin master
+git checkout -b ws6.1/outcome-tracker-markets origin/master
+
+# Agent 4
+git fetch origin master
+git checkout -b ws6.1/outcome-tracker-events origin/master
+
+# Agent 5
+git fetch origin master
+git checkout -b ws6.1/accuracy-scorer origin/master
+
+# (Agent 6-8 wait for upstream tasks)
+```
+
+### Step 2: Initialize Directory Structure
+```bash
+# All agents
+mkdir -p watchfuleye/v3/forecast
+touch watchfuleye/v3/forecast/__init__.py
+mkdir -p frontend/src/v3/forecast
+mkdir -p tests/integration
+```
+
+### Step 3: Assign Agents to Tasks
+**Decision Point:** Do you want to:
+- **Option A:** Deploy 8 separate AI agents (Cursor instances, Claude Code sessions)
+- **Option B:** Deploy 3-4 agents, each handling 2-3 tasks sequentially
+- **Option C:** Single agent, execute tasks sequentially (slower but simpler)
+
+**Recommendation:** Option B (3-4 agents, balanced parallelism)
+- Agent A: TASK 1 → TASK 2 (schema → extractor)
+- Agent B: TASK 3 → TASK 5 (markets → scorer)
+- Agent C: TASK 4 → TASK 6 (events → API)
+- Agent D: TASK 7 → TASK 8 (UI → integration)
+
+### Step 4: Update State File
+**Immediately after task assignment:**
+- Update `.cursor/state/current-position.md`
+- Document which agent owns which task
+- Set status to "in_progress"
+
+---
+
+## AGENT RESPONSIBILITIES (Every Agent Must)
+
+1. **Read state file first** (`.cursor/state/current-position.md`)
+2. **Read task spec** (this file, find your TASK number)
+3. **Read owned files** (understand existing code)
+4. **Run tests before coding** (verify baseline works)
+5. **Code iteratively** (commit every logical unit)
+6. **Test continuously** (don't wait until "done")
+7. **Update state file** (after every session)
+8. **Notify downstream agents** (via state file handoffs)
+9. **Open PR when complete** (use template, fill all sections)
+10. **Never break sacred surfaces** (Main Feed, Custom Feed, Telegram, Intel Reports, AI Modal)
+
+---
+
+**End of Execution Plan**
+
+This is the most detailed, parallel-safe execution plan for WS6.1. Follow it **exactly** and we ship perfectly in 15 days.
