@@ -1,6 +1,11 @@
-"""Metrics API for forecast accountability dashboard.
+"""Metrics API for WS6.1 forecast accountability dashboard.
 
 Provides aggregate accuracy metrics for the Track Record panel.
+
+Contract notes:
+- This endpoint is **flag-gated** by `V3_FORECAST_TRACKING` (default OFF).
+- Response keys must be stable even when there are 0 forecasts, so the UI doesn't
+  mis-grade "no data" as "bad performance".
 """
 
 from __future__ import annotations
@@ -26,25 +31,18 @@ def get_forecast_metrics():
     Returns:
         200: {
             "overall": {
-                "total_forecasts": int,
+                "total_forecasts": int,          # total tracked (pending + resolved + unresolved)
                 "resolved_forecasts": int,
-                "pending_forecasts": int,
-                "avg_brier_score": float,
-                "calibration_error": float,
-                "hit_rate": float
+                "pending_forecasts": int,        # includes "unresolved"
+                "mean_brier_score": float|null,  # across resolved forecasts only
+                "mean_log_score": float|null,
+                "calibration_error": float|null,
+                "accuracy_percentage": float|null,
+                "hit_rate_by_horizon": {"7_days": float|null, "30_days": float|null, "90_days": float|null}
             },
-            "by_domain": {
-                "geopolitics": {"avg_brier": float, "count": int},
-                "markets": {"avg_brier": float, "count": int},
-                "cyber": {"avg_brier": float, "count": int}
-            },
-            "recent_performance": [
-                {"date": "YYYY-MM-DD", "brier": float, "count": int}
-            ],
-            "calibration_curve": {
-                "0": {"expected": 0.05, "observed": 0.08, "count": 25, "error": 0.03},
-                ...
-            }
+            "by_domain": {...},
+            "recent_performance": [...],
+            "calibration_curve": {...}
         }
         404: Feature disabled
         500: Internal error
@@ -74,6 +72,7 @@ def get_forecast_metrics():
                         outcome_status,
                         outcome_result,
                         outcome_confidence,
+                        outcome_measured_at,
                         outcome_method,
                         brier_score,
                         log_score,
@@ -86,23 +85,31 @@ def get_forecast_metrics():
                 )
                 forecasts = cur.fetchall()
 
-        if not forecasts:
-            return jsonify({
-                "overall": {
-                    "total_forecasts": 0,
-                    "resolved_forecasts": 0,
-                    "pending_forecasts": 0,
-                    "avg_brier_score": None,
-                    "calibration_error": None,
-                    "hit_rate": None,
-                },
-                "by_domain": {},
-                "recent_performance": [],
-                "calibration_curve": {},
-            })
+        total_forecasts = len(forecasts)
+        resolved = [f for f in forecasts if f.get("outcome_status") == "resolved"]
+        pending = [f for f in forecasts if f.get("outcome_status") != "resolved"]
+
+        if total_forecasts == 0:
+            return jsonify(
+                {
+                    "overall": {
+                        "total_forecasts": 0,
+                        "resolved_forecasts": 0,
+                        "pending_forecasts": 0,
+                        "mean_brier_score": None,
+                        "mean_log_score": None,
+                        "calibration_error": None,
+                        "accuracy_percentage": None,
+                        "hit_rate_by_horizon": {"7_days": None, "30_days": None, "90_days": None},
+                    },
+                    "by_domain": {},
+                    "recent_performance": [],
+                    "calibration_curve": {},
+                }
+            )
 
         # Calculate overall metrics
-        overall = calculate_overall_metrics(forecasts)
+        overall_stats = calculate_overall_metrics(forecasts)
 
         # Calculate by-domain metrics
         by_domain = _calculate_domain_metrics(forecasts)
@@ -110,16 +117,18 @@ def get_forecast_metrics():
         # Calculate recent performance (last 30 days, grouped by day)
         recent_performance = _calculate_recent_performance(forecasts)
 
-        # Calculate calibration curve
-        resolved = [f for f in forecasts if f["outcome_status"] == "resolved"]
+        # Calculate calibration curve (resolved only)
         calibration_curve = calculate_calibration_curve(resolved)
 
-        # Calculate hit rates by horizon
+        # Calculate hit rates by horizon (resolved only)
         hit_rate_by_horizon = _calculate_hit_rate_by_horizon(resolved)
 
         return jsonify({
             "overall": {
-                **overall,
+                **overall_stats,
+                "total_forecasts": total_forecasts,
+                "resolved_forecasts": len(resolved),
+                "pending_forecasts": len(pending),
                 "hit_rate_by_horizon": hit_rate_by_horizon,
             },
             "by_domain": by_domain,
