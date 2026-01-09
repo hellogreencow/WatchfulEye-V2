@@ -1,0 +1,543 @@
+---
+alwaysApply: true
+---
+## WatchfulEye V3 — Shipping Discipline (Version Control, PRs, Merges)
+
+### Purpose
+Rigorous version control and shipping discipline to maintain code quality, prevent regressions, and enable clean rollbacks. Works on laptop development with incremental GitHub updates.
+
+---
+
+## Git Workflow (Laptop Development Model)
+
+### Branch Strategy
+
+**Branch Naming Convention:**
+- `wsX/<slice-name>` — Workstream slices (e.g., `ws4/enhance-examine-runner`)
+- `fix/<issue-name>` — Bug fixes (e.g., `fix/examine-api-timeout`)
+- `docs/<topic>` — Documentation (e.g., `docs/add-architecture-diagram`)
+- `infra/<change>` — Infrastructure (e.g., `infra/add-docker-compose`)
+
+**Branch Creation (from laptop):**
+```bash
+# Always create from origin/master, never local master
+cd /Users/oli/WatchfulEye-V2
+git fetch origin master
+git checkout -b wsX/<slice-name> origin/master
+```
+
+**Why origin/master?** Because server staging has `master` checked out in a worktree, local `master` might be stale.
+
+---
+
+### Commit Discipline
+
+#### Commit Early, Commit Often
+- Commit after every logical unit of work (1 function, 1 test, 1 file)
+- NEVER wait until "everything is done" to commit
+- Commits are cheap, lost work is expensive
+
+#### Commit Message Format
+```
+wsX: <imperative verb> <brief description>
+
+<optional detailed explanation>
+
+<optional references>
+```
+
+**Examples:**
+```
+ws4: add confidence intervals to examine reports
+
+- Add confidence field to ReportContent type
+- Calculate confidence based on evidence count + source trust
+- Update tests to verify confidence calculation
+
+Refs: WATCHFULEYE_V3_MASTER_PLAN.md WS4.1
+```
+
+```
+fix: examine API timeout on slow Postgres queries
+
+Add 2-second connection timeout to prevent hanging.
+Postgres unavailability should degrade gracefully.
+
+Refs: #27
+```
+
+**Good commit messages:**
+- `ws4: add evidence ranking by source trust + recency`
+- `ws5: implement FRED connector with rate limiting`
+- `fix: handle missing PG_DSN in examine endpoint`
+- `docs: update master plan with WS4.1 completion`
+
+**Bad commit messages:**
+- `update` (what was updated?)
+- `fix bug` (what bug?)
+- `changes` (what changes?)
+- `wip` (not descriptive enough)
+
+---
+
+### Pre-Commit Checklist (MANDATORY)
+
+Before EVERY commit:
+```bash
+# 1. Review changes
+git diff
+
+# 2. Stage selectively (if needed)
+git add <specific-files>
+
+# 3. Verify what's staged
+git status
+
+# 4. Run relevant checks
+# Backend:
+ruff check watchfuleye tests
+mypy watchfuleye
+
+# Frontend (if touched):
+cd frontend
+npm run lint
+npm run typecheck
+
+# 5. Run relevant tests
+# Backend:
+python -m unittest discover -s tests -p "test_*.py"
+
+# Frontend (if touched):
+cd frontend
+npm test -- --watchAll=false
+
+# 6. Commit
+git commit -m "wsX: <message>"
+```
+
+**DO NOT** commit if:
+- Linter fails
+- Type checker fails
+- Tests fail
+- You haven't reviewed the diff
+
+---
+
+### Push Discipline
+
+#### Push Frequency
+- Push after every commit (or every 2-3 commits)
+- NEVER wait until "end of day" to push
+- Laptop could fail, push is your backup
+
+#### Push Command
+```bash
+git push origin wsX/<slice-name>
+```
+
+#### First Push (set upstream)
+```bash
+git push -u origin wsX/<slice-name>
+```
+
+---
+
+## Pull Request Workflow
+
+### PR Creation Triggers
+Open a PR when:
+1. Workstream slice is complete (all acceptance criteria met)
+2. All tests pass locally
+3. Code is ready for review
+4. You want feedback mid-slice (mark as "Draft")
+
+### PR Creation Process
+
+```bash
+# 1. Ensure branch is pushed
+git push origin wsX/<slice-name>
+
+# 2. Open PR via GitHub CLI (recommended)
+gh pr create --title "wsX: <Slice Description>" --body "$(cat <<'EOF'
+## Intent
+<What this PR does and why>
+
+## Workstream
+<WS number and name from master plan>
+
+## Owned Paths
+<Files/directories this PR touches>
+
+## Flags
+<Feature flags used, defaults>
+
+## Dependencies
+<Any dependencies on other PRs/workstreams>
+
+## Verification Steps
+- [ ] Backend tests pass
+- [ ] Frontend tests pass (if applicable)
+- [ ] Staging smoke test: <specific test>
+
+## Acceptance Criteria
+- [ ] <Criterion 1 from master plan>
+- [ ] <Criterion 2 from master plan>
+- [ ] <Criterion 3 from master plan>
+
+## Rollback Plan
+<How to rollback if issues found>
+EOF
+)"
+
+# 3. Or open via GitHub web UI
+# Navigate to: https://github.com/hellogreencow/WatchfulEye-V2/compare/master...<branch-name>
+```
+
+### PR Template (Use `.github/pull_request_template.md`)
+
+```markdown
+## Intent
+<!-- What this PR does and why (2-3 sentences) -->
+
+## Workstream
+<!-- e.g., WS4.1 — Enhance Examine Runner -->
+
+## Owned Paths
+<!-- Files/directories this PR modifies -->
+- `watchfuleye/v3/investigations/`
+- `tests/test_v3_examine_api.py`
+
+## Explicitly NOT Touched
+<!-- Hot files avoided -->
+- `web_app.py` ✅ (not modified)
+- `frontend/src/Dashboard.tsx` ✅ (not modified)
+
+## Flags
+<!-- Feature flags used and defaults -->
+- `V3_EXAMINE_MVP` — default OFF
+
+## Dependencies
+<!-- Any dependencies on other PRs/workstreams -->
+- Depends on: WS0 entity resolution (merged in PR #15)
+
+## Verification Steps
+- [ ] Backend: `ruff check && mypy watchfuleye && pytest`
+- [ ] Frontend: `npm run lint && npm run typecheck && npm test`
+- [ ] Staging: Deploy to `/opt/watchfuleye2-staging` and test `POST /api/v3/examine`
+
+## Acceptance Criteria
+- [ ] Examine endpoint returns confidence intervals (0.0-1.0)
+- [ ] Evidence ranked by trust score * recency
+- [ ] Dissent section includes counter-evidence
+- [ ] Tests verify all new behavior
+
+## Rollback Plan
+<!-- How to rollback if issues found -->
+- Set `V3_EXAMINE_MVP=false` in staging env
+- Or revert this PR's commits from master
+
+## CodeRabbit Notes
+<!-- Address CodeRabbit comments here or note "N/A" -->
+```
+
+---
+
+### PR Review Process
+
+#### Before Requesting Review:
+1. **Self-review** — Read your own PR diff as if you're the reviewer
+2. **CI green** — All checks must pass
+3. **Conflicts resolved** — Rebase if needed
+4. **Description complete** — All template sections filled
+
+#### Requesting Review:
+```bash
+# Assign reviewer via GitHub CLI
+gh pr edit <pr-number> --add-reviewer <username>
+
+# Or request review via GitHub web UI
+```
+
+#### Addressing Review Feedback:
+1. Fix requested changes
+2. Commit with clear message: `review: address feedback on <topic>`
+3. Push to same branch
+4. Respond to review comments
+5. Re-request review when ready
+
+---
+
+### Merge Discipline
+
+#### Merge Requirements (ALL must be met):
+- [ ] CI green (backend + frontend)
+- [ ] CodeRabbit review addressed (or explicitly justified)
+- [ ] At least 1 approval (if required by branch protection)
+- [ ] No merge conflicts
+- [ ] Acceptance criteria verified
+- [ ] Staging validation complete (if applicable)
+
+#### Merge Methods:
+**Preferred: Squash and Merge**
+- Keeps master history clean
+- One commit per PR
+- Recommended for most PRs
+
+**Alternative: Merge Commit**
+- Preserves all commits
+- Use for complex PRs with valuable commit history
+
+**NEVER: Rebase and Merge**
+- Can rewrite history
+- Avoid unless you know what you're doing
+
+#### Post-Merge Actions:
+```bash
+# 1. Switch to master
+git checkout master
+
+# 2. Pull latest
+git pull --ff-only origin master
+
+# 3. Delete feature branch (local)
+git branch -d wsX/<slice-name>
+
+# 4. Delete feature branch (remote)
+git push origin --delete wsX/<slice-name>
+
+# 5. Update state file
+# (mark workstream slice as complete in .cursor/state/current-position.md)
+
+# 6. Update master plan (if acceptance criteria completed)
+# (update CURRENT NEXT SLICE section in WATCHFULEYE_V3_MASTER_PLAN.md)
+```
+
+---
+
+## Staging Deployment (After Merge)
+
+### Deploy to Server Staging
+
+```bash
+# SSH to server
+ssh <user>@<server>
+
+# Navigate to staging worktree
+cd /opt/watchfuleye2-staging
+
+# Pull latest master (fast-forward only)
+git pull --ff-only origin master
+
+# Restart services
+sudo systemctl restart watchfuleye-backend-staging
+sudo systemctl restart watchfuleye-frontend-staging
+
+# Verify
+curl http://localhost:5004/api/health
+curl http://localhost:3001/
+```
+
+### Staging Validation Checklist
+- [ ] Backend health check passes
+- [ ] Frontend serves correctly
+- [ ] Feature flag can be toggled
+- [ ] Feature works as expected (when flag ON)
+- [ ] No regressions (when flag OFF)
+- [ ] Logs show no errors
+
+---
+
+## Conflict Resolution
+
+### If Merge Conflicts Occur:
+
+```bash
+# 1. Fetch latest master
+git fetch origin master
+
+# 2. Rebase onto master
+git rebase origin/master
+
+# 3. Resolve conflicts
+# Edit conflicting files, remove conflict markers
+
+# 4. Stage resolved files
+git add <resolved-files>
+
+# 5. Continue rebase
+git rebase --continue
+
+# 6. Force push (rebase rewrites history)
+git push --force-with-lease origin wsX/<slice-name>
+```
+
+**Abort rebase if needed:**
+```bash
+git rebase --abort
+```
+
+---
+
+## Emergency Rollback
+
+### If Production Breaks After Merge:
+
+**Option 1: Revert the Merge Commit**
+```bash
+# Find merge commit SHA
+git log --oneline -10
+
+# Revert it
+git revert -m 1 <merge-commit-sha>
+
+# Push
+git push origin master
+```
+
+**Option 2: Flip Feature Flag OFF**
+```bash
+# SSH to server
+ssh <user>@<server>
+
+# Edit staging/prod env
+# Set V3_<FEATURE>=false
+
+# Restart services
+sudo systemctl restart watchfuleye-backend
+```
+
+**Option 3: Emergency Hotfix PR**
+- Create branch from master
+- Fix issue
+- Fast-track PR review
+- Merge and deploy
+
+---
+
+## Version Tagging (For Production Releases)
+
+### When Ready for Production:
+```bash
+# Tag release
+git tag -a v3.0.0 -m "WatchfulEye V3.0.0 - Initial Release"
+
+# Push tag
+git push origin v3.0.0
+
+# Document release notes
+# Create GitHub release from tag with changelog
+```
+
+---
+
+## GitHub Hygiene
+
+### Keep Branches Clean
+- Delete merged branches immediately
+- Close stale PRs (>30 days inactive)
+- Archive old branches if needed
+
+### Keep Issues Organized
+- Link PRs to issues
+- Close issues when PRs merge
+- Use labels: `bug`, `enhancement`, `docs`, `infra`, `ws0`, `ws1`, etc.
+
+### Keep Discussions Focused
+- PR comments for code review
+- Issues for bug reports and feature requests
+- Discussions for architecture decisions
+
+---
+
+## Local Development Workflow Summary
+
+```bash
+# 1. Start new slice
+git fetch origin master
+git checkout -b wsX/<slice> origin/master
+
+# 2. Make changes
+<edit code>
+<run tests>
+<commit frequently>
+
+# 3. Push regularly
+git push origin wsX/<slice>
+
+# 4. Open PR when ready
+gh pr create --title "..." --body "..."
+
+# 5. Address CI/review feedback
+<fix issues>
+<commit + push>
+
+# 6. Merge when green
+<merge via GitHub UI>
+
+# 7. Clean up
+git checkout master
+git pull --ff-only origin master
+git branch -d wsX/<slice>
+
+# 8. Deploy to staging (via SSH)
+cd /opt/watchfuleye2-staging
+git pull --ff-only origin master
+sudo systemctl restart watchfuleye-backend-staging watchfuleye-frontend-staging
+```
+
+---
+
+## Best Practices
+
+### DO:
+- ✅ Commit early and often
+- ✅ Push after every commit
+- ✅ Write descriptive commit messages
+- ✅ Run tests before committing
+- ✅ Self-review before requesting review
+- ✅ Keep PRs focused (one workstream slice)
+- ✅ Update state files after merge
+- ✅ Delete merged branches
+
+### DON'T:
+- ❌ Commit broken code
+- ❌ Push without testing
+- ❌ Write vague commit messages
+- ❌ Mix unrelated changes in one PR
+- ❌ Force push to master
+- ❌ Ignore CI failures
+- ❌ Leave stale branches
+
+---
+
+## Troubleshooting
+
+### "Git push rejected"
+```bash
+# Someone else pushed first
+git pull --rebase origin wsX/<slice>
+git push origin wsX/<slice>
+```
+
+### "Tests fail in CI but pass locally"
+- Ensure Python version matches CI (3.12)
+- Ensure Node version matches CI (18.x)
+- Check for environment variable differences
+- Review CI logs carefully
+
+### "Merge conflicts are complex"
+- Ask for help (don't guess)
+- Consider rebasing in smaller chunks
+- Use a visual merge tool (e.g., VSCode)
+
+---
+
+## Agent Responsibilities
+
+ANY agent pushing code MUST:
+- Run pre-commit checks
+- Write clear commit messages
+- Push regularly
+- Open PRs with complete descriptions
+- Address CI failures
+- Update state files post-merge

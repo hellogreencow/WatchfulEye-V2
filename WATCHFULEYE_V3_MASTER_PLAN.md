@@ -254,7 +254,8 @@ CURRENT STATE (as of this chat):
 
 CURRENT NEXT SLICE (execute this first unless told otherwise):
 - **WS4.0 COMPLETE** ✅ (merged PR #19 + #21)
-- Next: **WS4.1** — Enhance Examine runner with better evidence ranking, multi-source connectors, and structured predictions with confidence intervals.
+- **NEW TOP PRIORITY**: **WS6.1** — Forecast Accountability (accuracy engine) — "Single biggest differentiator" per advisor feedback. Transform "AI analysis" → "proven track record".
+- Next after WS6.1: **WS4.1** — Enhance Examine runner with better evidence ranking, multi-source connectors, and structured predictions with confidence intervals.
 
 Completed slices:
 - WS0.1-WS0.6: Entity resolution + seeding (PRs #8-#15)
@@ -573,23 +574,52 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
 - **Acceptance**:
   - A user sets an alert; system fires it with evidence and a short explanation.
 
-#### WS6.1 — Forecast Accountability (Track predictions vs outcomes)
-- **Goal**: measure what we produce against what actually happens (no self-delusion).
+#### WS6.1 — Forecast Accountability (Track predictions vs outcomes) — **TOP PRIORITY 🔥**
+- **Goal**: measure what we produce against what actually happens (no self-delusion). **CRITICAL DIFFERENTIATOR** — transforms product from "AI analysis" to "proven track record" with measurable accuracy.
+- **Strategic Importance**: Advisor feedback identifies this as **"the single biggest differentiator"** — ships BEFORE WS4.1.
 - **Delivers**:
   - Persist every forecast from investigations/reports as a `Forecast` object:
     - claim, probability, horizon, entities, assumptions, evidence_ids, created_at
-  - Outcome tracking jobs:
-    - market outcomes (price moves), event outcomes (e.g., sanctions added), odds outcomes (Polymarket resolution)
+  - Outcome tracking jobs (automated):
+    - market outcomes (price moves via WS5 markets connector)
+    - event outcomes (ACLED, GDELT, news feeds)
+    - odds outcomes (Polymarket resolution)
   - Scoring + calibration:
-    - Brier score, calibration curves, hit rate by horizon, “confidence vs accuracy”
+    - Brier score (perfect = 0.0, industry benchmark = 0.25, target < 0.20)
+    - Calibration curves (70% predictions should happen 70% of the time)
+    - Hit rate by horizon (7-day, 30-day, 90-day accuracy)
+    - Log scores + confidence vs accuracy analysis
   - UX surfaces:
-    - “Track record” panel + per-report “how past forecasts performed”
+    - "Track Record" panel (overall accuracy, Brier score, calibration chart)
+    - Per-report "how past forecasts performed" (build trust over time)
+    - Confidence badges on predictions (0.0-1.0 scale)
+  - Feedback loop:
+    - Use forecast accuracy to optimize scoring weights (adaptive learning)
+    - Surface dissent when confidence is low (< 0.6)
+    - Flag predictions that performed poorly for review
 - **Owns**:
-  - `watchfuleye/v3/forecast/*` (new) + DB tables (in WS0 schema)
+  - `watchfuleye/v3/forecast/*` (new)
+  - `frontend/src/v3/forecast/*` (new)
+  - DB tables: `forecasts`, `forecast_updates` (audit trail)
 - **Flags**:
-  - `V3_FORECAST_TRACKING`
+  - `V3_FORECAST_TRACKING` (default OFF)
 - **Acceptance**:
-  - Any forecast shown to users can be found later in a track record view with outcome status.
+  - Any forecast shown to users can be found later in a track record view with outcome status
+  - Brier score calculated for all resolved forecasts (automated)
+  - Calibration curve visible to users (trust-building)
+  - Hit rate by horizon displayed prominently (30-day, 90-day)
+  - Users can filter forecasts by domain (geopolitics, markets, cyber)
+- **Dependencies**:
+  - WS0 ✅ (entity IDs for forecast linking)
+  - WS4.0 ✅ (reports generate forecasts)
+  - WS5 (optional, for automated outcome measurement; can start with manual)
+- **Timeline**: 2-3 weeks (highest priority)
+- **Success Metrics**:
+  - Avg Brier score < 0.20 (target)
+  - Calibration error < 0.10 (near-perfect)
+  - User trust score > 4.0/5.0 (survey: "I trust WatchfulEye predictions")
+  - 70%+ of forecasts resolved within horizon + 7 days
+- **Documentation**: See `.cursor/rules/watchfuleye-feedback-loop.mdc` for full implementation strategy.
 
 #### WS7 — Modular Panels v2 (ModuleSpec + Server‑Backed, No Client Secrets)
 - **Goal**: keep the draggable dashboard UX, but make modules real and safe.

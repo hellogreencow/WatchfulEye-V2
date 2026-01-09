@@ -1,0 +1,197 @@
+---
+alwaysApply: true
+---
+## WatchfulEye V3 — Context Memory & State Persistence (Agent-Agnostic)
+
+### Purpose
+This rule ensures **any coding agent** (Cursor, Claude Code, future AI) can immediately understand project state, work context, and next steps **without human handoff**. Enables seamless agent switching mid-session.
+
+### Critical Context Files (Always Read First)
+When starting ANY session, read these files in order:
+1. **`.cursor/state/current-position.md`** — Real-time state snapshot (updated after every significant action)
+2. **`WATCHFULEYE_V3_MASTER_PLAN.md`** — Single source of truth for architecture, workstreams, contracts
+3. **`.cursor/rules/watchfuleye-v3.mdc`** — Operating rules (flags, boundaries, deploy discipline)
+4. **`.cursor/rules/watchfuleye-laptop-clone.mdc`** — Laptop development workflow
+5. **`.cursor/rules/watchfuleye-shipping-discipline.mdc`** — Version control, PRs, merges
+6. **`.cursor/rules/watchfuleye-feedback-loop.mdc`** — Accuracy engine strategy
+
+### State Tracking Protocol (MANDATORY)
+
+#### After Every Significant Action:
+1. **Update `.cursor/state/current-position.md`** with:
+   - Current workstream (e.g., "WS4.1 — Enhance Examine runner")
+   - Files modified in this session
+   - Tests added/updated
+   - Next immediate step
+   - Blockers (if any)
+   - Timestamp
+
+2. **Commit frequently** with clear messages:
+   - Format: `wsX: <brief description>`
+   - Example: `ws4: add confidence intervals to examine reports`
+
+3. **Update master plan** if acceptance criteria completed:
+   - Mark workstream slice as complete
+   - Update "CURRENT NEXT SLICE" section
+
+#### Session Start Protocol:
+```bash
+# 1. Read state
+cat .cursor/state/current-position.md
+
+# 2. Check git status
+git status
+git branch
+
+# 3. Pull latest (if on master)
+git pull --ff-only origin master
+
+# 4. Verify environment
+python --version  # Should be 3.12
+node --version    # Should be 18.x
+```
+
+#### Session End Protocol:
+```bash
+# 1. Update state file
+# (write to .cursor/state/current-position.md)
+
+# 2. Commit work
+git add .
+git commit -m "wsX: <description>"
+
+# 3. Push to origin
+git push origin <branch-name>
+
+# 4. Note next steps in state file
+```
+
+### Relational Positioning (Where We Are)
+
+#### Completed:
+- ✅ WS0.1-WS0.6: Entity resolution + seeding (PRs #8-#15)
+- ✅ WS4.0: Examine MVP skeleton (PRs #19 + #21)
+- ✅ Docs: Laptop clone workflow (PR #23)
+
+#### Current:
+- 🔄 **WS4.1**: Enhance Examine runner (in planning)
+  - Better evidence ranking
+  - Multi-source connectors
+  - Confidence intervals
+  - Dissent sections
+
+#### Next in Queue:
+- ⏳ WS5: Connectors Registry (Tier A: markets, FRED, USGS)
+- ⏳ WS1: Main News Feed professionalization
+- ⏳ WS1.1: Intelligence Reports v2 (curation + differentiation)
+
+#### Dependencies:
+- WS1-WS12 depend on WS0 (COMPLETE ✅)
+- WS6 (Alerts) depends on WS4 (Investigations)
+- WS7 (Modules) depends on WS5 (Connectors)
+- WS6.1 (Forecast Accountability) depends on WS4 (Reports)
+
+### Agent Switching Handoff
+
+If switching agents mid-task, the new agent should:
+
+1. **Read `.cursor/state/current-position.md`** — Understand exactly where the previous agent left off
+2. **Read open PR description** (if exists) — Understand intent and acceptance criteria
+3. **Run tests** — Verify current state is green
+4. **Ask clarifying questions** — If state is ambiguous
+
+### Memory Artifacts (Persistent Across Sessions)
+
+- **`.cursor/state/current-position.md`** — Always current (updated after every action)
+- **`.cursor/state/workstream-progress.json`** — Machine-readable progress tracking
+- **`.cursor/state/session-notes/YYYY-MM-DD-HH-MM.md`** — Per-session detailed notes
+- **Git commit history** — Granular action log
+- **PR descriptions** — Intent and acceptance criteria
+- **Test coverage** — Living documentation of behavior
+
+### Automatic Context Sharing
+
+To enable seamless agent switching:
+
+1. **State file is source of truth** — No tribal knowledge
+2. **Tests document behavior** — No "trust me, it works"
+3. **Flags gate all new surfaces** — No invisible dependencies
+4. **Owned paths prevent conflicts** — No merge hell
+5. **CI validates correctness** — No broken state
+
+### Context Preservation Checklist
+
+Before ending ANY session:
+- [ ] `.cursor/state/current-position.md` updated
+- [ ] All changes committed with clear messages
+- [ ] Tests pass locally (`ruff check`, `mypy`, `pytest`, `npm test`, `npm run build`)
+- [ ] Pushed to origin (if on feature branch)
+- [ ] PR opened (if slice complete)
+- [ ] Next steps documented in state file
+
+### Figma Design Vision (UI Truth)
+
+From master plan + Figma Make prototype:
+- **Command Center aesthetic**: Terminal-style input, world map, draggable panels
+- **Core verbs**: Examine, Monitor, Pin, Share, Export
+- **Layout**: Top 60% = map + layers, Bottom 40% = draggable modules
+- **Trust UI**: Citations, confidence, dissent, provenance always visible
+- **Keyboard-first**: Omnibox/terminal always reachable
+- **Progressive disclosure**: Short high-signal by default, expand on request
+
+**Figma URL**: https://www.figma.com/make/yGEihhyU0cCiVNi3DILbAt/Landing-Page-for-WatchfulEye
+
+### Non-Negotiables (Never Forget)
+
+1. **Sacred surfaces** (never break):
+   - Main News Feed
+   - Custom News Feed
+   - Telegram Intel Reports
+   - Intel Reports
+   - AI Analysis Modal
+
+2. **Flag discipline**:
+   - All V3 features behind `V3_*` flags
+   - Default OFF in production
+   - Rollback = flip flag OFF
+
+3. **File ownership**:
+   - Each workstream owns its paths
+   - Hot files require justification
+   - WS0 owns contracts/schemas
+
+4. **CI discipline**:
+   - Green required for merge
+   - CodeRabbit review addressed
+   - One workstream slice per PR
+
+5. **Production isolation**:
+   - NEVER deploy V3 to prod until ready
+   - Prod is frozen
+   - Staging only via master-only worktree
+
+### Quick Reference
+
+**Repo**: https://github.com/hellogreencow/WatchfulEye-V2.git
+**Prod**: watchfuleye.us (frozen)
+**Staging**: staging.watchfuleye.us (updated from master)
+**Laptop dev**: `/Users/oli/WatchfulEye-V2`
+**Server dev**: `/opt/watchfuleye2`
+**Server staging**: `/opt/watchfuleye2-staging`
+**Server prod**: `/opt/watchfuleye2-prod`
+
+**Current branch**: `master` (or feature branch `wsX/<slice-name>`)
+**Python**: 3.12
+**Node**: 18.x
+**Database**: Postgres with pgvector (pg16)
+
+### Agent Responsibilities
+
+ANY agent working on this codebase MUST:
+- Read state files before starting
+- Update state files after actions
+- Commit frequently with clear messages
+- Run tests before marking complete
+- Never break sacred surfaces
+- Always use feature flags
+- Document next steps clearly

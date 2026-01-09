@@ -1,0 +1,789 @@
+---
+alwaysApply: true
+---
+## WatchfulEye V3 — Feedback Loop & Accuracy Engine
+
+### Purpose
+Transform WatchfulEye from "AI analysis" to "proven track record" through systematic prediction tracking, outcome measurement, and continuous accuracy improvement. This is the **MOST CRITICAL differentiator**.
+
+---
+
+## Strategic Intent (Advisor Feedback #1)
+
+**Current Flow (Incomplete):**
+```
+A. Analyze (ingest + understand)
+  ↓
+B. Predict (generate forecasts)
+  ↓
+C. User Consumption (read reports)
+  ↓
+❌ LOOP NOT CLOSED
+```
+
+**Required Flow (Complete):**
+```
+A. Analyze (ingest + understand)
+  ↓
+B. Predict (generate forecasts + store with timestamps)
+  ↓
+C. User Consumption (read reports)
+  ↓
+D. Outcome Measurement (track what actually happened)
+  ↓
+E. Accuracy Scoring (Brier, calibration, hit rate)
+  ↓
+F. Feedback (improve prediction model + user trust)
+  ↑___________________________|
+```
+
+**Value Proposition Shift:**
+- FROM: "AI analyzes news"
+- TO: "Proven 73% accuracy on geopolitical predictions over 6 months"
+
+---
+
+## WS6.1: Forecast Accountability (Implementation Plan)
+
+### Core Components
+
+#### 1. Forecast Storage Schema
+
+**Postgres Table: `forecasts`**
+```sql
+CREATE TABLE forecasts (
+  id TEXT PRIMARY KEY,
+  report_id TEXT NOT NULL REFERENCES v3_reports(id),
+  investigation_id TEXT REFERENCES v3_investigations(id),
+
+  -- Forecast content
+  claim TEXT NOT NULL,
+  probability REAL NOT NULL CHECK (probability >= 0.0 AND probability <= 1.0),
+  horizon_days INTEGER NOT NULL,
+  horizon_date TIMESTAMPTZ NOT NULL,
+
+  -- Entity linking
+  entity_ids TEXT[],
+  entity_types TEXT[],
+
+  -- Evidence
+  evidence_ids TEXT[],
+  assumptions TEXT[],
+
+  -- Outcome tracking
+  outcome_status TEXT NOT NULL DEFAULT 'pending', -- pending|resolved|inconclusive|invalid
+  outcome_result BOOLEAN, -- true=happened, false=didn't happen, null=pending/inconclusive
+  outcome_confidence REAL, -- 0.0-1.0, assessor confidence in outcome determination
+  outcome_measured_at TIMESTAMPTZ,
+  outcome_method TEXT, -- 'market_data'|'event_feed'|'manual'|'composite'
+  outcome_evidence JSONB,
+
+  -- Scoring
+  brier_score REAL, -- (forecast_prob - actual_outcome)^2
+  log_score REAL, -- log(prob) if happened, log(1-prob) if didn't
+  calibration_bin INTEGER, -- 0-10 (0-10%, 10-20%, ..., 90-100%)
+
+  -- Metadata
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by TEXT, -- user_id or 'system'
+  tags TEXT[]
+);
+
+CREATE INDEX idx_forecasts_report_id ON forecasts(report_id);
+CREATE INDEX idx_forecasts_horizon_date ON forecasts(horizon_date);
+CREATE INDEX idx_forecasts_outcome_status ON forecasts(outcome_status);
+CREATE INDEX idx_forecasts_entity_ids ON forecasts USING GIN(entity_ids);
+CREATE INDEX idx_forecasts_tags ON forecasts USING GIN(tags);
+```
+
+**Postgres Table: `forecast_updates`** (audit trail)
+```sql
+CREATE TABLE forecast_updates (
+  id BIGSERIAL PRIMARY KEY,
+  forecast_id TEXT NOT NULL REFERENCES forecasts(id),
+  update_type TEXT NOT NULL, -- 'outcome_resolved'|'confidence_updated'|'invalidated'
+  previous_state JSONB,
+  new_state JSONB,
+  reason TEXT,
+  updated_by TEXT, -- user_id or 'system'
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### 2. Forecast Extraction (From Reports)
+
+**Backend: `watchfuleye/v3/forecast/extractor.py`**
+```python
+from typing import List, Dict, Any
+from datetime import datetime, timedelta
+
+def extract_forecasts_from_report(
+    report_id: str,
+    report_content: Dict[str, Any],
+    investigation_id: str | None = None
+) -> List[Dict[str, Any]]:
+    """
+    Extract structured forecasts from report content.
+
+    Looks for:
+    - "predictions" section
+    - probability claims (explicit or inferred)
+    - time horizons (explicit or inferred from context)
+    """
+    forecasts = []
+
+    predictions = report_content.get("predictions", [])
+    for pred in predictions:
+        # Parse prediction text for probability and horizon
+        # Example: "70% chance Iran increases oil exports within 30 days"
+        probability = extract_probability(pred)
+        horizon_days = extract_horizon(pred)
+        claim = normalize_claim(pred)
+
+        if probability and horizon_days:
+            forecasts.append({
+                "report_id": report_id,
+                "investigation_id": investigation_id,
+                "claim": claim,
+                "probability": probability,
+                "horizon_days": horizon_days,
+                "horizon_date": datetime.utcnow() + timedelta(days=horizon_days),
+                "evidence_ids": report_content.get("evidence_ids", []),
+                "assumptions": report_content.get("assumptions", []),
+            })
+
+    return forecasts
+```
+
+#### 3. Outcome Measurement (Automated)
+
+**Backend: `watchfuleye/v3/forecast/outcome_tracker.py`**
+```python
+from typing import Literal
+
+OutcomeMethod = Literal["market_data", "event_feed", "manual", "composite"]
+
+async def measure_forecast_outcome(forecast_id: str) -> Dict[str, Any]:
+    """
+    Measure forecast outcome using multiple methods.
+
+    Priority order:
+    1. Market data (if forecast is about price movements)
+    2. Event feeds (ACLED, GDELT, official announcements)
+    3. Manual assessment (if automated methods fail)
+    4. Composite (combine multiple signals with confidence weighting)
+    """
+    forecast = get_forecast(forecast_id)
+
+    # Determine outcome method based on forecast type
+    if is_market_forecast(forecast):
+        return await measure_via_market_data(forecast)
+    elif is_event_forecast(forecast):
+        return await measure_via_event_feeds(forecast)
+    else:
+        return {"outcome_status": "pending", "outcome_method": "manual"}
+
+async def measure_via_market_data(forecast: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Measure outcomes for market-related forecasts.
+
+    Example: "80% chance AAPL closes above $180 by Jan 31"
+    """
+    entity_ids = forecast["entity_ids"]
+    horizon_date = forecast["horizon_date"]
+
+    # Fetch price data from WS5 markets connector
+    prices = await fetch_market_data(entity_ids, horizon_date)
+
+    # Evaluate claim against actual data
+    outcome_result = evaluate_market_claim(forecast["claim"], prices)
+
+    return {
+        "outcome_status": "resolved",
+        "outcome_result": outcome_result,
+        "outcome_confidence": 1.0,  # Market data is authoritative
+        "outcome_method": "market_data",
+        "outcome_measured_at": datetime.utcnow(),
+        "outcome_evidence": {"prices": prices}
+    }
+
+async def measure_via_event_feeds(forecast: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Measure outcomes for event-based forecasts.
+
+    Example: "60% chance of conflict escalation in Gaza within 14 days"
+    """
+    claim = forecast["claim"]
+    horizon_date = forecast["horizon_date"]
+    entity_ids = forecast["entity_ids"]
+
+    # Fetch events from WS5 connectors (ACLED, GDELT, news)
+    events = await fetch_event_data(entity_ids, horizon_date)
+
+    # Evaluate claim against events (may require LLM for nuanced assessment)
+    outcome_result, confidence = evaluate_event_claim(claim, events)
+
+    return {
+        "outcome_status": "resolved" if confidence > 0.7 else "inconclusive",
+        "outcome_result": outcome_result if confidence > 0.7 else None,
+        "outcome_confidence": confidence,
+        "outcome_method": "event_feed",
+        "outcome_measured_at": datetime.utcnow(),
+        "outcome_evidence": {"events": events}
+    }
+```
+
+#### 4. Accuracy Scoring
+
+**Backend: `watchfuleye/v3/forecast/scorer.py`**
+```python
+def calculate_brier_score(probability: float, outcome: bool) -> float:
+    """
+    Brier score: (p - actual)^2
+
+    Perfect prediction: 0.0
+    Worst prediction: 1.0
+    """
+    actual = 1.0 if outcome else 0.0
+    return (probability - actual) ** 2
+
+def calculate_log_score(probability: float, outcome: bool) -> float:
+    """
+    Logarithmic score (proper scoring rule).
+
+    Penalizes confident wrong predictions heavily.
+    """
+    import math
+    epsilon = 1e-10  # Prevent log(0)
+
+    if outcome:
+        return math.log(max(probability, epsilon))
+    else:
+        return math.log(max(1 - probability, epsilon))
+
+def assign_calibration_bin(probability: float) -> int:
+    """
+    Assign probability to calibration bin (0-10).
+
+    Bin 0: 0-10%
+    Bin 1: 10-20%
+    ...
+    Bin 9: 90-100%
+    """
+    return min(int(probability * 10), 9)
+
+def calculate_calibration_curve(forecasts: List[Dict[str, Any]]) -> Dict[int, Dict[str, float]]:
+    """
+    Calculate calibration curve across all bins.
+
+    Perfect calibration: forecasts at 70% should happen 70% of the time.
+    """
+    bins = {i: {"count": 0, "successes": 0} for i in range(10)}
+
+    for f in forecasts:
+        if f["outcome_status"] != "resolved":
+            continue
+
+        bin_idx = assign_calibration_bin(f["probability"])
+        bins[bin_idx]["count"] += 1
+        if f["outcome_result"]:
+            bins[bin_idx]["successes"] += 1
+
+    # Calculate observed frequency per bin
+    calibration = {}
+    for bin_idx, data in bins.items():
+        if data["count"] > 0:
+            observed_freq = data["successes"] / data["count"]
+            expected_freq = (bin_idx + 0.5) / 10  # Mid-point of bin
+            calibration[bin_idx] = {
+                "expected": expected_freq,
+                "observed": observed_freq,
+                "count": data["count"],
+                "error": abs(observed_freq - expected_freq)
+            }
+
+    return calibration
+```
+
+#### 5. User-Facing Accuracy Metrics
+
+**Backend: `watchfuleye/v3/forecast/metrics_api.py`**
+```python
+@bp_v3_forecast.route("/metrics", methods=["GET"])
+def get_accuracy_metrics():
+    """
+    GET /api/v3/forecast/metrics
+
+    Returns:
+    {
+      "overall": {
+        "total_forecasts": 1523,
+        "resolved_forecasts": 847,
+        "pending_forecasts": 676,
+        "avg_brier_score": 0.18,
+        "calibration_score": 0.92,
+        "hit_rate_by_horizon": {
+          "7_days": 0.73,
+          "30_days": 0.68,
+          "90_days": 0.61
+        }
+      },
+      "by_domain": {
+        "geopolitics": {"avg_brier": 0.21, "count": 342},
+        "markets": {"avg_brier": 0.15, "count": 287},
+        "cyber": {"avg_brier": 0.19, "count": 218}
+      },
+      "recent_performance": [
+        {"date": "2026-01-01", "brier": 0.17, "count": 23},
+        {"date": "2025-12-25", "brier": 0.19, "count": 31}
+      ],
+      "calibration_curve": {...}
+    }
+    """
+    # Implementation here
+    pass
+```
+
+**Frontend: `frontend/src/v3/forecast/AccuracyPanel.tsx`**
+```tsx
+export function AccuracyPanel() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Track Record</CardTitle>
+        <CardDescription>
+          Proven accuracy over {metrics.resolved_forecasts} resolved predictions
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Overall Brier Score */}
+          <div>
+            <div className="text-2xl font-bold">
+              {(1 - metrics.avg_brier_score) * 100}%
+            </div>
+            <div className="text-sm text-slate-600">
+              Overall Accuracy (Brier Score: {metrics.avg_brier_score.toFixed(3)})
+            </div>
+          </div>
+
+          {/* Calibration Chart */}
+          <CalibrationChart data={metrics.calibration_curve} />
+
+          {/* Hit Rate by Horizon */}
+          <div>
+            <h4 className="font-semibold mb-2">Hit Rate by Time Horizon</h4>
+            <div className="space-y-1">
+              <div>7 days: {metrics.hit_rate_by_horizon["7_days"]}%</div>
+              <div>30 days: {metrics.hit_rate_by_horizon["30_days"]}%</div>
+              <div>90 days: {metrics.hit_rate_by_horizon["90_days"]}%</div>
+            </div>
+          </div>
+
+          {/* Recent Performance Trend */}
+          <PerformanceTrendChart data={metrics.recent_performance} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+## Scoring Model (Advisor Feedback #2)
+
+### Current Scoring Components
+
+From codebase analysis:
+- **Trust scoring** (sources table: `trust_score` 0.0-1.0)
+- **Quality filter** (articles table: `quality_score` 0.0-1.0)
+- **Financial metrics** (recommendations + performance tracking)
+- **Portfolio risk** (recommendation_performance table)
+
+### Weight Definition Strategy
+
+#### Phase 1: Expert-Defined Weights (Current)
+```python
+# watchfuleye/scoring/composite.py (hypothetical)
+DEFAULT_WEIGHTS = {
+    "source_trust": 0.35,
+    "content_quality": 0.25,
+    "recency": 0.20,
+    "entity_relevance": 0.15,
+    "user_feedback": 0.05,
+}
+```
+
+**Rationale:**
+- Source trust is most important (35%) — fake news must be deprioritized
+- Content quality (25%) — well-structured, evidence-rich content
+- Recency (20%) — breaking news matters
+- Entity relevance (15%) — matches user's watchlist
+- User feedback (5%) — saved articles, upvotes
+
+#### Phase 2: Adaptive Weights (Future)
+```python
+# watchfuleye/v3/forecast/adaptive_weights.py
+def optimize_weights_via_forecast_accuracy(
+    historical_forecasts: List[Dict],
+    weight_ranges: Dict[str, Tuple[float, float]]
+) -> Dict[str, float]:
+    """
+    Use Bayesian optimization to find weights that minimize Brier score.
+
+    Objective: Minimize avg Brier score across all resolved forecasts.
+    Constraints: Weights must sum to 1.0, stay within ranges.
+    """
+    # Implementation: scipy.optimize or similar
+    pass
+```
+
+**Trigger:** Re-optimize weights every 100 resolved forecasts.
+
+#### Phase 3: User-Defined Weights (Future)
+```python
+# User preferences
+user_weights = {
+    "source_trust": 0.50,  # User prioritizes trusted sources heavily
+    "content_quality": 0.30,
+    "recency": 0.10,  # User doesn't care about breaking news
+    "entity_relevance": 0.10,
+}
+```
+
+**UX:** Slider interface in settings:
+- "How much do you trust mainstream media vs. alternative sources?"
+- "Do you prefer depth or breadth?"
+- "Breaking news or evergreen analysis?"
+
+---
+
+## Data Sources (Advisor Feedback #3)
+
+### Current Sources (From Codebase)
+- News feeds (ingestion/news_ingest.py)
+- Telegram channels
+- Postgres articles + embeddings (RAG)
+
+### Recommended Additions
+
+#### 1. Social Sentiment (PhantomBuster)
+**Use Case:** Track narrative velocity, brigading, astroturfing
+
+**Implementation (WS5 Connector):**
+```python
+# watchfuleye/v3/connectors/phantombuster.py
+async def fetch_social_sentiment(
+    topic: str,
+    platforms: List[str] = ["twitter", "reddit"],
+    lookback_hours: int = 24
+) -> Dict[str, Any]:
+    """
+    Fetch social media posts via PhantomBuster API.
+
+    Returns:
+    - Post volume trend
+    - Sentiment distribution (via local NLP, not API)
+    - Brigading detection (unusual coordinated activity)
+    - Top influencers
+    """
+    # Rate limited: max 1000 posts/day
+    # Cached: 1 hour TTL
+    pass
+```
+
+**Governance:**
+- Tier B connector (non-standard signals)
+- Rate limits + caching (reduce API costs)
+- Anti-brigading filters (detect coordinated inauthentic behavior)
+- Confidence gating (only show when confidence > 0.6)
+
+#### 2. Alternative Data (Ripts)
+**Use Case:** Satellite imagery, supply chain, mobility data
+
+**Implementation (WS5 Connector):**
+```python
+# watchfuleye/v3/connectors/ripts.py
+async def fetch_ripts_data(
+    dataset_id: str,
+    entity_ids: List[str],
+    timeframe: str
+) -> Dict[str, Any]:
+    """
+    Fetch alternative data from Ripts.
+
+    Examples:
+    - Satellite imagery of ports (shipping activity)
+    - Mobility data (foot traffic in retail)
+    - Supply chain disruptions
+    """
+    # Tier C connector (high-value, expensive)
+    pass
+```
+
+**Governance:**
+- Tier C connector (gated, expensive)
+- Explicit user consent required
+- Cost tracking per query
+- Only for high-value investigations
+
+---
+
+## Target User & Usage Patterns (Advisor Feedback #4)
+
+### User Personas
+
+#### 1. **Trader** (Primary)
+**Profile:**
+- Needs: Actionable predictions, risk alerts, market-moving events
+- Timeline: Intraday to 30-day horizons
+- Usage: Morning brief + real-time alerts + war room dashboard
+
+**User Flow:**
+```
+Morning:
+- Read Global Brief (5-10 min)
+- Check "Movers & Shakers" panel (top 10 events/predictions)
+- Set alerts for key tickers/events
+
+Intraday:
+- Receive Telegram alerts when odds drift or narrative spikes
+- Click alert → deep dive investigation → decide trade
+
+End of Day:
+- Review accuracy metrics (build trust)
+- Adjust watchlist based on performance
+```
+
+**Key Features:**
+- Fast signal-to-action (< 30 seconds from alert to investigation)
+- Clear confidence intervals (don't trade on low-confidence signals)
+- Track record visible (build trust over time)
+
+#### 2. **Researcher** (Secondary)
+**Profile:**
+- Needs: Deep analysis, evidence trails, scenario modeling
+- Timeline: Weekly to 90-day horizons
+- Usage: Weekly deep dives + scenario campaigns + export for reports
+
+**User Flow:**
+```
+Weekly:
+- Run "Examine X" investigations (30-60 min deep dives)
+- Build scenario campaigns ("What if Iran closes Strait of Hormuz?")
+- Export reports with citations for clients/bosses
+
+Monthly:
+- Review forecast track record
+- Adjust research focus based on accuracy trends
+```
+
+**Key Features:**
+- Evidence-first reports (citations required)
+- Dissent sections (what would change my mind?)
+- Export to PDF/Notion with full attribution
+
+#### 3. **Analyst** (Tertiary)
+**Profile:**
+- Needs: Curated intel feed, geopolitical monitoring, early warning
+- Timeline: 7-day to 90-day horizons
+- Usage: Daily brief + monitors + ad-hoc investigations
+
+**User Flow:**
+```
+Daily:
+- Read Intelligence Report (15 min)
+- Check monitors (custom watchlist for regions/topics)
+- Flag articles for deeper analysis
+
+Weekly:
+- Run ad-hoc "Examine X" investigations
+- Share key findings with team (export)
+```
+
+**Key Features:**
+- Custom feed curation (topics, regions, entities)
+- Monitor dashboard (all watches in one view)
+- Team sharing (export, Slack integration)
+
+### Usage Pattern Matrix
+
+| User Type   | Morning Brief | Alerts | War Room | Accuracy | Export |
+|-------------|---------------|--------|----------|----------|--------|
+| Trader      | ✅ Daily      | ✅ Yes | ✅ Yes   | ✅ High  | ❌ No  |
+| Researcher  | ❌ No         | ❌ No  | ❌ No    | ✅ Med   | ✅ Yes |
+| Analyst     | ✅ Daily      | ✅ Yes | ✅ Yes   | ✅ Med   | ✅ Yes |
+
+### Tailored Experiences (Future)
+
+**User Preferences:**
+```python
+user_profile = {
+    "persona": "trader",  # trader|researcher|analyst
+    "default_view": "war_room",  # war_room|brief|custom_feed
+    "alert_channels": ["telegram", "email"],
+    "verbosity": "brief",  # brief|detailed|operator
+    "confidence_threshold": 0.70,  # Only show high-confidence signals
+}
+```
+
+**UI Adaptations:**
+- Traders: War room default, alert-heavy, confidence badges prominent
+- Researchers: Investigate page default, evidence-first, export prominent
+- Analysts: Brief default, monitors prominent, team sharing
+
+---
+
+## Infrastructure: Postgres Hybrid (Advisor Feedback #5)
+
+### Current Setup (From Codebase)
+- **Postgres with pgvector** (pg16)
+- **Vector embeddings**: `article_embeddings` (1536-dim), `article_embeddings_voyage` (1024-dim)
+- **Relational data**: articles, analyses, sources, users, etc.
+- **Search**: FTS (tsvector) + vector similarity (HNSW index)
+
+### Strategy: Postgres-First Hybrid
+
+**Decision: Stay with Postgres + pgvector (no separate vector DB)**
+
+**Rationale:**
+1. **Simplicity**: One database to manage, one connection pool, one backup strategy
+2. **Performance**: pgvector HNSW is fast enough for < 10M vectors
+3. **Joins**: Can join vector search with relational filters (source, date, category)
+4. **Cost**: No additional vector DB service ($0 vs. $200+/month)
+5. **Maturity**: pgvector is production-ready, well-maintained
+
+**When to Reconsider:**
+- Vector count > 10M (performance degradation)
+- Sub-10ms latency required (pgvector is ~50-100ms)
+- Need advanced vector features (Pinecone/Weaviate/Qdrant)
+
+### Hybrid Query Example
+
+```python
+# watchfuleye/storage/postgres_repo.py
+def hybrid_search(
+    query: str,
+    embedding: List[float],
+    filters: Dict[str, Any],
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Hybrid search: FTS + vector similarity + relational filters.
+
+    1. FTS match (fast, keyword-based)
+    2. Vector similarity (semantic)
+    3. Relational filters (source, date, category)
+    4. Combine + rank + return top-k
+    """
+    with psycopg.connect(pg_dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                WITH fts_matches AS (
+                  SELECT id, ts_rank(search_tsv, websearch_to_tsquery('english', %s)) AS fts_score
+                  FROM articles
+                  WHERE search_tsv @@ websearch_to_tsquery('english', %s)
+                    AND source_domain = ANY(%s)
+                    AND created_at >= %s
+                  LIMIT 100
+                ),
+                vector_matches AS (
+                  SELECT a.id, 1 - (e.embedding <=> %s::vector) AS vector_score
+                  FROM articles a
+                  JOIN article_embeddings e ON e.article_id = a.id
+                  WHERE a.source_domain = ANY(%s)
+                    AND a.created_at >= %s
+                  ORDER BY e.embedding <=> %s::vector
+                  LIMIT 100
+                )
+                SELECT a.*,
+                       COALESCE(f.fts_score, 0) * 0.3 + COALESCE(v.vector_score, 0) * 0.7 AS combined_score
+                FROM articles a
+                LEFT JOIN fts_matches f ON f.id = a.id
+                LEFT JOIN vector_matches v ON v.id = a.id
+                WHERE a.id IN (SELECT id FROM fts_matches UNION SELECT id FROM vector_matches)
+                ORDER BY combined_score DESC
+                LIMIT %s
+                """,
+                (query, query, filters["sources"], filters["after"], embedding,
+                 filters["sources"], filters["after"], embedding, limit)
+            )
+            return [dict(row) for row in cur.fetchall()]
+```
+
+---
+
+## Implementation Priority
+
+### Phase 1: Core Feedback Loop (WS6.1)
+1. ✅ Forecast schema + storage
+2. ✅ Forecast extraction from reports
+3. ✅ Outcome measurement (market data + event feeds)
+4. ✅ Accuracy scoring (Brier, calibration, log score)
+5. ✅ User-facing metrics API + UI panel
+
+**Timeline:** 2-3 weeks (highest priority)
+
+### Phase 2: Adaptive Weights
+6. Optimize scoring weights based on forecast accuracy
+7. A/B test weight changes (measure impact on Brier score)
+
+**Timeline:** 1-2 weeks (after Phase 1 proves value)
+
+### Phase 3: Social Sentiment + Alternative Data
+8. Add PhantomBuster connector (Tier B)
+9. Add Ripts connector (Tier C, gated)
+10. Integrate into evidence ranking
+
+**Timeline:** 2-3 weeks (after WS5 connectors framework exists)
+
+### Phase 4: Personalization
+11. User-defined weights
+12. Persona-based default views
+13. Confidence threshold settings
+
+**Timeline:** 1-2 weeks (polish, not critical path)
+
+---
+
+## Success Metrics
+
+### Product Metrics
+- **Forecast volume**: > 100 forecasts/week
+- **Resolution rate**: > 70% of forecasts resolved within horizon + 7 days
+- **Avg Brier score**: < 0.20 (industry benchmark: 0.25)
+- **Calibration error**: < 0.10 (perfect = 0.00)
+- **User trust**: "I trust WatchfulEye predictions" > 4.0/5.0 (survey)
+
+### Business Metrics
+- **User retention**: +30% (users who see track record stay longer)
+- **Referral rate**: +50% ("Check out their proven accuracy")
+- **Conversion**: +40% (free → paid on strength of track record)
+- **NPS**: +20 points (differentiation = delight)
+
+---
+
+## Advisor Feedback Summary: Addressed ✅
+
+1. **Feedback loop**: ✅ WS6.1 closes the loop (predict → measure → score → improve)
+2. **Scoring model**: ✅ Weights defined (expert → adaptive → user-defined roadmap)
+3. **Data sources**: ✅ PhantomBuster + Ripts added to roadmap (WS5 connectors)
+4. **Target user**: ✅ Trader/Researcher/Analyst personas + usage patterns defined
+5. **Infrastructure**: ✅ Postgres-first hybrid (pgvector, no separate vector DB)
+
+**Strategic Insight:**
+> "The feedback loop/accuracy engine is the single biggest differentiator. Ship WS6.1 ASAP."
+
+---
+
+## Agent Responsibilities
+
+ANY agent implementing forecast/accuracy features MUST:
+- Store ALL predictions with timestamps + evidence
+- Implement outcome measurement (automated where possible)
+- Calculate Brier scores for resolved forecasts
+- Expose accuracy metrics to users (don't hide track record)
+- Never delete forecasts (append-only, full auditability)
