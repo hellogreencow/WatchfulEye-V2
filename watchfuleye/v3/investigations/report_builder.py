@@ -54,19 +54,19 @@ def build_report_content(q: str, evidence: list[dict[str, Any]]) -> dict[str, An
 def _build_bullets(q: str, evidence: list[dict[str, Any]]) -> list[str]:
     q_s = (q or "").strip()
     if not evidence:
-        bullets = [
+        bullets_empty = [
             f"No matching articles found for query '{q_s}'.",
             "Evidence-first mode: without evidence, no substantive claims are made.",
             "Next: refine the query (entity + event + timeframe) or re-run after ingestion updates.",
         ]
-        return bullets[:5]
+        return bullets_empty[:5]
 
     n = len(evidence)
     sources = [str(e.get("source_name") or "Unknown").strip() for e in evidence]
     top_sources = [s for s, _c in Counter([s for s in sources if s]).most_common(3)]
     src_s = ", ".join(top_sources) if top_sources else "Unknown"
 
-    bullets: list[str] = [
+    bullets_out: list[str] = [
         f"Found {n} matching article(s) for '{q_s}'.",
         f"Top sources: {src_s}.",
     ]
@@ -79,11 +79,11 @@ def _build_bullets(q: str, evidence: list[dict[str, Any]]) -> list[str]:
         dt = _iso_date(e.get("published_at"))
         when = f", {dt}" if dt else ""
         if eid is None:
-            bullets.append(f"{title} — {src}{when}")
+            bullets_out.append(f"{title} — {src}{when}")
         else:
-            bullets.append(f"[{eid}] {title} — {src}{when}")
+            bullets_out.append(f"[{eid}] {title} — {src}{when}")
 
-    return bullets[:5]
+    return bullets_out[:5]
 
 
 def _build_predictions(q: str, evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:

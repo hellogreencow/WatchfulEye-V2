@@ -46,7 +46,7 @@ def fetch_evidence_detailed(
     limit_i = _clamp_int(limit, default=10, lo=1, hi=50)
 
     try:
-        import psycopg  # type: ignore
+        import psycopg
     except Exception:
         return [], "psycopg_unavailable"
 
