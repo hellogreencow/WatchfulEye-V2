@@ -44,6 +44,7 @@ Ship V3 **without breaking** the existing UI and production surfaces. Everything
 ### New-chat handoff rule (so fresh agents don’t lose context)
 - When starting a new agent chat, paste:
   - `WATCHFULEYE_V3_MASTER_PLAN.md` as the single source of truth
+  - **Figma Make is the UI truth**: do not invent UI; match the current Figma Make prototype for V3 surfaces. If Figma MCP is available, use it to pull the latest nodes/screens before implementing UI changes.
   - current “next workstream slice” (e.g., `WS0.4 seed ISO-3166 + OFAC into entities`)
   - the staging/dev directory rule above (dev vs worktree)
   - “CI green required; one workstream per PR; flags default OFF”
