@@ -20,6 +20,7 @@ import { useAnalysis } from './lib/useAnalysis';
 import type { AnalysisStructured } from './lib/analysisTypes';
 import { MessageActions, SmartSuggestions, InsightBadge, exportConversation } from './components/ChatEnhancements';
 import RAGAnimation from './components/RAGAnimation';
+import { AccuracyPanel } from './components/forecast/AccuracyPanel';
 
 // API Base URL resolution
 // - Default: relative `/api` (nginx reverse proxy in production)
@@ -3827,6 +3828,11 @@ function AnalyticsModal({ isOpen, onClose, stats, sentimentDist, marketIntel }: 
                   </Card>
                 </motion.div>
               ))}
+            </div>
+
+            {/* WS6.1: Forecast Accountability Panel */}
+            <div className="mb-8">
+              <AccuracyPanel />
             </div>
 
             {/* Charts */}
