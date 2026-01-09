@@ -24,3 +24,8 @@ def is_v3_examine_mvp_enabled() -> bool:
     return _env_truthy(os.environ.get("V3_EXAMINE_MVP"))
 
 
+def is_v3_forecast_tracking_enabled() -> bool:
+    """Gate WS6.1 forecast accountability features (accuracy engine)."""
+    return _env_truthy(os.environ.get("V3_FORECAST_TRACKING"))
+
+

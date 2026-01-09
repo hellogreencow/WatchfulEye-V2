@@ -23,7 +23,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
-from watchfuleye.v3.flags import is_v3_examine_mvp_enabled
+from watchfuleye.v3.flags import is_v3_examine_mvp_enabled, is_v3_forecast_tracking_enabled
 from watchfuleye.v3.investigations.evidence import fetch_evidence_detailed
 from watchfuleye.v3.investigations.report_builder import build_report_content
 
@@ -139,6 +139,61 @@ def v3_examine():
                         """,
                         (report_id, investigation_id, report["title"], report["summary"], Jsonb(report["content"])),
                     )
+
+                    # WS6.1: Extract and store forecasts from report (behind flag)
+                    if is_v3_forecast_tracking_enabled():
+                        try:
+                            from watchfuleye.v3.forecast.extractor import extract_forecasts_from_report
+
+                            forecasts = extract_forecasts_from_report(
+                                report_id=report_id,
+                                report_content=report["content"],
+                                investigation_id=investigation_id,
+                            )
+
+                            # Insert forecasts into database
+                            for fc in forecasts:
+                                cur.execute(
+                                    """
+                                    INSERT INTO forecasts (
+                                        id, report_id, investigation_id, claim, probability,
+                                        horizon_days, horizon_date, entity_ids, entity_types,
+                                        evidence_ids, assumptions, tags, created_by, outcome_status,
+                                        outcome_result, outcome_confidence, outcome_measured_at,
+                                        outcome_method, outcome_evidence, brier_score, log_score,
+                                        calibration_bin
+                                    )
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    ON CONFLICT (id) DO NOTHING
+                                    """,
+                                    (
+                                        fc["id"],
+                                        fc["report_id"],
+                                        fc.get("investigation_id"),
+                                        fc["claim"],
+                                        fc["probability"],
+                                        fc["horizon_days"],
+                                        fc["horizon_date"],
+                                        fc.get("entity_ids"),
+                                        fc.get("entity_types"),
+                                        fc.get("evidence_ids"),
+                                        fc.get("assumptions"),
+                                        fc.get("tags"),
+                                        fc.get("created_by"),
+                                        fc.get("outcome_status", "pending"),
+                                        fc.get("outcome_result"),
+                                        fc.get("outcome_confidence"),
+                                        fc.get("outcome_measured_at"),
+                                        fc.get("outcome_method"),
+                                        Jsonb(fc["outcome_evidence"]) if fc.get("outcome_evidence") else None,
+                                        fc.get("brier_score"),
+                                        fc.get("log_score"),
+                                        fc.get("calibration_bin"),
+                                    ),
+                                )
+                        except Exception:
+                            # Don't fail the request if forecast extraction fails
+                            pass
         except Exception:
             pass
 

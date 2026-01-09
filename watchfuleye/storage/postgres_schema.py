@@ -276,6 +276,71 @@ SCHEMA_STATEMENTS: list[str] = [
     );
     """,
     "CREATE INDEX IF NOT EXISTS idx_v3_reports_investigation_id ON v3_reports (investigation_id);",
+
+    # =====================
+    # WS6.1 (V3): Forecast Accountability (accuracy engine)
+    # =====================
+    """
+    CREATE TABLE IF NOT EXISTS forecasts (
+      id TEXT PRIMARY KEY,
+      report_id TEXT NOT NULL REFERENCES v3_reports(id) ON DELETE CASCADE,
+      investigation_id TEXT REFERENCES v3_investigations(id) ON DELETE CASCADE,
+
+      -- Forecast content
+      claim TEXT NOT NULL,
+      probability REAL NOT NULL CHECK (probability >= 0.0 AND probability <= 1.0),
+      horizon_days INTEGER NOT NULL,
+      horizon_date TIMESTAMPTZ NOT NULL,
+
+      -- Entity linking (references WS0 entities)
+      entity_ids TEXT[],
+      entity_types TEXT[],
+
+      -- Evidence
+      evidence_ids TEXT[],
+      assumptions TEXT[],
+
+      -- Outcome tracking
+      outcome_status TEXT NOT NULL DEFAULT 'pending', -- pending|resolved|unresolved
+      outcome_result BOOLEAN,
+      outcome_confidence REAL,
+      outcome_measured_at TIMESTAMPTZ,
+      outcome_method TEXT,
+      outcome_evidence JSONB,
+
+      -- Scoring (calculated from scorer.py)
+      brier_score REAL,
+      log_score REAL,
+      calibration_bin INTEGER,
+
+      -- Metadata
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by TEXT,
+      tags TEXT[]
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_forecasts_report_id ON forecasts(report_id);",
+    "CREATE INDEX IF NOT EXISTS idx_forecasts_horizon_date ON forecasts(horizon_date);",
+    "CREATE INDEX IF NOT EXISTS idx_forecasts_outcome_status ON forecasts(outcome_status);",
+    "CREATE INDEX IF NOT EXISTS idx_forecasts_entity_ids ON forecasts USING GIN(entity_ids);",
+    "CREATE INDEX IF NOT EXISTS idx_forecasts_tags ON forecasts USING GIN(tags);",
+    "CREATE INDEX IF NOT EXISTS idx_forecasts_created_at ON forecasts(created_at DESC);",
+
+    """
+    CREATE TABLE IF NOT EXISTS forecast_updates (
+      id BIGSERIAL PRIMARY KEY,
+      forecast_id TEXT NOT NULL REFERENCES forecasts(id) ON DELETE CASCADE,
+      update_type TEXT NOT NULL, -- probability_revision|outcome_measurement|manual_correction
+      previous_state JSONB,
+      new_state JSONB,
+      reason TEXT,
+      updated_by TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_forecast_updates_forecast_id ON forecast_updates(forecast_id);",
+    "CREATE INDEX IF NOT EXISTS idx_forecast_updates_updated_at ON forecast_updates(updated_at DESC);",
 ]
 
 
