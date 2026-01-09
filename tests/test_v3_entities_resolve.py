@@ -4,6 +4,7 @@ import unittest
 import psycopg
 
 from watchfuleye.storage.postgres_schema import ensure_postgres_schema
+from watchfuleye.v3.entity_seeds import seed_minimal_countries, seed_minimal_sanctions_targets
 
 
 class TestV3EntitiesResolve(unittest.TestCase):
@@ -13,6 +14,8 @@ class TestV3EntitiesResolve(unittest.TestCase):
     def setUpClass(cls) -> None:
         os.environ["PG_DSN"] = cls.PG_DSN
         ensure_postgres_schema(cls.PG_DSN)
+        seed_minimal_countries(cls.PG_DSN)
+        seed_minimal_sanctions_targets(cls.PG_DSN)
 
         # Seed one entity + identifier for exact match testing.
         with psycopg.connect(cls.PG_DSN, autocommit=True) as conn:
@@ -69,6 +72,34 @@ class TestV3EntitiesResolve(unittest.TestCase):
         self.assertEqual(matches[0].get("entity_id"), "ent_ticker_aapl")
         self.assertEqual(matches[0].get("entity_type"), "ticker")
         self.assertIn("confidence", matches[0])
+
+    def test_resolve_country_by_iso2(self):
+        os.environ["V3_ENTITY_IDS"] = "true"
+        import importlib
+        import web_app as web_app_mod
+
+        web_app_mod = importlib.reload(web_app_mod)
+        client = web_app_mod.app.test_client()
+        r = client.post("/api/v3/entities/resolve", json={"q": "US", "k": 5, "types": ["country"]})
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        matches = data.get("matches") or []
+        self.assertGreaterEqual(len(matches), 1)
+        self.assertEqual(matches[0].get("entity_type"), "country")
+
+    def test_resolve_sanctions_target_by_ofac_id(self):
+        os.environ["V3_ENTITY_IDS"] = "true"
+        import importlib
+        import web_app as web_app_mod
+
+        web_app_mod = importlib.reload(web_app_mod)
+        client = web_app_mod.app.test_client()
+        r = client.post("/api/v3/entities/resolve", json={"q": "OFAC_TEST_0001", "k": 5, "types": ["sanctions_target"]})
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        matches = data.get("matches") or []
+        self.assertGreaterEqual(len(matches), 1)
+        self.assertEqual(matches[0].get("entity_type"), "sanctions_target")
 
 
 if __name__ == "__main__":
