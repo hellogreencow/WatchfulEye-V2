@@ -133,16 +133,18 @@ I'm working on WatchfulEye V3 from a laptop clone. Here's the critical context:
 
 1. **Master Plan**: Read `WATCHFULEYE_V3_MASTER_PLAN.md` — this is the single source of truth for V3 architecture, workstreams (WS0-WS12), contracts, and sequencing.
 
-2. **Current State**:
-   - Current next slice: [CHECK `CURRENT NEXT SLICE` in master plan]
-   - Last merged PR: [CHECK GitHub]
-   - Staging status: [CHECK if latest master is deployed to staging]
+2. **Current State** (as of latest master):
+   - Current next slice: WS4.1 — Enhance Examine runner (better evidence ranking, multi-source connectors, confidence intervals)
+   - Last merged PRs: #23 (laptop clone rule), #19 (WS4 backend), #21 (WS7 frontend UI)
+   - Completed: WS0 (entity resolution + seeding), WS4.0 (Examine MVP skeleton)
+   - Staging: Updated with latest master, ready for V3 flag testing
 
 3. **Production Rule**: NEVER deploy V3 to prod. Prod is frozen until V3 is complete. V3 features are flag-gated and default OFF.
 
 4. **Workflow**:
-   - I'm on laptop clone at `~/watchfuleye2`
-   - Create branches from `origin/master`: `git checkout -b wsX/<slice> origin/master`
+   - I'm on laptop clone at `~/watchfuleye2` (or wherever you cloned it)
+   - Pull latest master first: `git fetch origin master && git checkout master && git pull --ff-only origin master`
+   - Create branches from `origin/master`: `git checkout -b wsX/<slice-name> origin/master`
    - One workstream slice per branch/PR
    - CI must be green (lint, typecheck, tests, build)
    - CodeRabbit review required (check via GitHub MCP if needed)
@@ -150,7 +152,7 @@ I'm working on WatchfulEye V3 from a laptop clone. Here's the critical context:
 5. **Figma Make is UI truth**: Match Figma Make prototype for V3 surfaces. Use Figma MCP if available to pull latest nodes before implementing UI.
 
 6. **Key Files**:
-   - `WATCHFULEYE_V3_MASTER_PLAN.md` — architecture, workstreams, contracts
+   - `WATCHFULEYE_V3_MASTER_PLAN.md` — architecture, workstreams, contracts (READ THIS FIRST)
    - `.cursor/rules/watchfuleye-v3.mdc` — operating rules
    - `.cursor/rules/watchfuleye-laptop-clone.mdc` — laptop workflow (this file)
    - `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` — parallel-safe execution model
@@ -176,6 +178,16 @@ I'm working on WatchfulEye V3 from a laptop clone. Here's the critical context:
    - One workstream slice per PR
    - CI green required for merge
    - CodeRabbit review addressed (or explicitly deferred)
+
+9. **Deployment** (from laptop, via SSH to server):
+   - After PR merge: SSH to server, `cd /opt/watchfuleye2-staging`, `git pull --ff-only origin master`, restart staging services
+   - Never deploy V3 to prod (prod is frozen)
+
+10. **First Steps**:
+    - Read `WATCHFULEYE_V3_MASTER_PLAN.md` section for your workstream
+    - Check `CURRENT NEXT SLICE` to confirm what to work on
+    - Verify owned paths before editing files
+    - Run CI checks locally before pushing
 
 What's the current next slice, and what should I work on?
 ```
