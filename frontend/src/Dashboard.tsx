@@ -3831,9 +3831,11 @@ function AnalyticsModal({ isOpen, onClose, stats, sentimentDist, marketIntel }: 
             </div>
 
             {/* WS6.1: Forecast Accountability Panel */}
-            <div className="mb-8">
-              <AccuracyPanel />
-            </div>
+            {process.env.REACT_APP_V3_FORECAST_TRACKING === 'true' && (
+              <div className="mb-8">
+                <AccuracyPanel />
+              </div>
+            )}
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
