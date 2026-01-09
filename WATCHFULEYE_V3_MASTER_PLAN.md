@@ -286,6 +286,27 @@ Safety constraints:
 
 ---
 
+### 3.9 Low-credit agent mode (when you need “lesser agents”)
+
+If you are low on credits, run agents in **low-credit mode**: smaller slices, fewer tool calls, and strict stop conditions.
+
+#### Low-credit mode rules (for the agent)
+- **Scope**: one micro-task only (1–2 files, or ≤150 LOC touched).
+- **Stop condition**: if the task expands beyond the owned paths or requires WS0 contracts, stop and ask for confirmation.
+- **No broad refactors**: no “cleanup”, no reformatting, no drive-by dependency bumps.
+- **No hot files unless required**: `web_app.py`, `watchfuleye/storage/postgres_schema.py`, `.github/workflows/ci.yml`, `frontend/src/App.tsx`.
+- **Verification**:
+  - run exactly one targeted test/command for the slice (not a full suite)
+  - include a single curl/smoke check command if it’s an API surface
+- **Deliverable**: a PR with a filled template and a short rollback note.
+
+#### What to give the agent (copy/paste)
+- The “Master handoff prompt” (3.8)
+- The slice name + owned paths + explicit NOT-touched paths
+- The acceptance criteria (3 bullets max)
+- The exact commands to run (start branch, run one test, push, open PR)
+- Full prompt template (recommended): `docs/V3_LOW_CREDIT_AGENT_MODE.md`
+
 ### 4) Workstreams (modular steps you can run as separate coding‑agent chats)
 Each workstream below is designed to be **independently implemented** with minimal overlap.
 
@@ -295,8 +316,6 @@ See `docs/V3_WORKSTREAM_EXECUTION_PLAYBOOK.md` for:
 - owned paths map (backend + frontend)
 - “hot files” list
 - slice checklist (flags, tests, rollback, staging verify)
-Also see `docs/V3_LOW_CREDIT_AGENT_MODE.md` for:
-- how to ship with weaker agents (bounded slices + explicit owned files + verifier merge gate)
 
 #### WS0 — V3 Contracts + Safety Envelope (MUST DO FIRST)
 - **Why**: without stable interfaces, parallel work will collide.

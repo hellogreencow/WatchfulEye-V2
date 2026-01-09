@@ -94,14 +94,18 @@ Every slice must declare:
   - staging smoke check steps (curl / UI clicks)
 - **Rollback** (almost always: flip flag OFF)
 
----
-
-## Low-credit / junior-agent mode
-If you run out of credits (or are using a weaker agent), enforce “safe mode”:
-- Only allow **bounded** slices with deterministic acceptance criteria.
-- Provide an explicit owned-files list and explicit “do not touch” list.
-- Force flag gates + response shape tests.
-
-See: `docs/V3_LOW_CREDIT_AGENT_MODE.md`
+## Low-credit agent mode (smallest possible slices)
+If you need to use smaller/cheaper agents:
+- Give them a **single micro-task** (1–2 files, or ≤150 LOC).
+- Provide:
+  - owned paths
+  - explicit NOT-touched paths
+  - exact test command (one command)
+  - exact acceptance criteria (3 bullets max)
+- Tell them to stop if:
+  - they need WS0 contract changes, or
+  - they need to edit a hot file, or
+  - the PR would cross workstreams.
+- Full prompt template: `docs/V3_LOW_CREDIT_AGENT_MODE.md`
 
 
