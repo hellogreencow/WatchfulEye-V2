@@ -12,11 +12,20 @@ retention engine path is broken.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+# When executed as a script by path (`python scripts/ci/e2e_smoke_ws6_alerts.py`),
+# Python sets sys.path[0] to `scripts/ci`, not the repo root, so `import watchfuleye`
+# will fail in CI. Make this self-contained by injecting the repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from watchfuleye.storage.postgres_schema import ensure_postgres_schema
 
