@@ -107,6 +107,25 @@ class TestForecastSchema(unittest.TestCase):
 
         with psycopg.connect(self.pg_dsn) as conn:
             with conn.cursor() as cur:
+                # Satisfy FK: forecasts.report_id -> v3_reports.id
+                cur.execute(
+                    """
+                    INSERT INTO v3_investigations (id, query, status, trace_id)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    ("inv_test_schema", "schema test", "succeeded", "trace_schema"),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO v3_reports (id, investigation_id, title, summary, content)
+                    VALUES (%s, %s, %s, %s, %s::jsonb)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    ("rpt_test", "inv_test_schema", "Schema Test", "Summary", "{}"),
+                )
+                conn.commit()
+
                 # Try to insert invalid probability (should fail)
                 with self.assertRaises(psycopg.errors.CheckViolation):
                     cur.execute(
@@ -145,6 +164,8 @@ class TestForecastSchema(unittest.TestCase):
 
                 # Clean up
                 cur.execute("DELETE FROM forecasts WHERE id LIKE 'fc_test%'")
+                cur.execute("DELETE FROM v3_reports WHERE id = %s", ("rpt_test",))
+                cur.execute("DELETE FROM v3_investigations WHERE id = %s", ("inv_test_schema",))
                 conn.commit()
 
     def test_foreign_key_constraints(self):
