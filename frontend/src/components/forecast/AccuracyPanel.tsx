@@ -13,10 +13,31 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../ui/card';
 
+interface RecentForecast {
+  id: string;
+  claim: string;
+  probability: number;
+  horizon_days: number;
+  horizon_date: string | null;
+  outcome_status: string;
+  outcome_result: boolean | null;
+  brier_score: number | null;
+  log_score: number | null;
+  outcome_method: string | null;
+  outcome_measured_at: string | null;
+  created_at: string | null;
+  tags?: string[];
+}
+
 interface ForecastMetrics {
   overall: {
     total_forecasts: number;
+    resolved_forecasts: number;
+    pending_forecasts: number;
+    unresolved_forecasts?: number;
+    invalid_forecasts?: number;
     mean_brier_score: number | null;
+    mean_log_score: number | null;
     calibration_error: number | null;
     accuracy_percentage: number | null;
     hit_rate_by_horizon?: {
@@ -25,6 +46,12 @@ interface ForecastMetrics {
       '90_days': number | null;
     };
   };
+  guardrails?: {
+    min_resolved_for_grade: number;
+    min_resolved_for_calibration: number;
+    min_resolved_for_domain: number;
+  };
+  recent_forecasts?: RecentForecast[];
   by_domain: {
     [domain: string]: {
       avg_brier: number;
@@ -50,6 +77,7 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
   const [metrics, setMetrics] = useState<ForecastMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -97,189 +125,142 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
     );
   }
 
-  const { overall, by_domain, recent_performance, calibration_curve } = metrics;
+  const { overall } = metrics;
+  const recent = metrics.recent_forecasts || [];
 
-  // Calculate accuracy grade
-  const getAccuracyGrade = (brierScore: number | null): string => {
-    if (brierScore === null) return 'N/A';
-    if (brierScore < 0.15) return 'A+';
-    if (brierScore < 0.20) return 'A';
-    if (brierScore < 0.25) return 'B';
-    if (brierScore < 0.30) return 'C';
-    return 'D';
+  const resolved = overall.resolved_forecasts ?? 0;
+  const pending = overall.pending_forecasts ?? 0;
+  const unresolved = overall.unresolved_forecasts ?? 0;
+  const invalid = overall.invalid_forecasts ?? 0;
+  const total = overall.total_forecasts ?? 0;
+
+  const guardrails = metrics.guardrails || {
+    min_resolved_for_grade: 20,
+    min_resolved_for_calibration: 50,
+    min_resolved_for_domain: 10,
   };
 
-  const getGradeColor = (grade: string): string => {
-    if (grade === 'A+' || grade === 'A') return 'text-green-400';
-    if (grade === 'B') return 'text-yellow-400';
-    if (grade === 'C') return 'text-orange-400';
-    return 'text-red-400';
+  const verdictLabel = (f: RecentForecast): { label: string; className: string } => {
+    if (f.outcome_status === 'resolved') {
+      return f.outcome_result
+        ? { label: 'Supported', className: 'text-green-400' }
+        : { label: 'Refuted', className: 'text-red-400' };
+    }
+    if (f.outcome_status === 'pending') return { label: 'Pending', className: 'text-yellow-400' };
+    if (f.outcome_status === 'unresolved') return { label: 'Unresolved', className: 'text-orange-400' };
+    if (f.outcome_status === 'invalid') return { label: 'Unverifiable', className: 'text-gray-400' };
+    return { label: f.outcome_status, className: 'text-gray-400' };
   };
-
-  const grade = getAccuracyGrade(overall.mean_brier_score);
-  const gradeColor = getGradeColor(grade);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Track Record</h2>
+        <h2 className="text-2xl font-bold text-white">Accountability Ledger</h2>
         <div className="text-sm text-gray-400">
-          {overall.total_forecasts} forecasts tracked
+          {total} items tracked
         </div>
       </div>
 
-      {/* Overall Accuracy Card */}
-      <Card className="p-6 bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {/* Accuracy Grade */}
+      {/* Summary counters */}
+      <Card className="p-6 bg-gray-900/50 border-gray-800">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">Accuracy Grade</div>
-            <div className={`text-4xl font-bold ${gradeColor}`}>{grade}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              Brier: {overall.mean_brier_score?.toFixed(3) || 'N/A'}
-            </div>
+            <div className="text-sm text-gray-400">Resolved</div>
+            <div className="text-3xl font-bold text-white">{resolved}</div>
           </div>
+          <div className="text-center">
+            <div className="text-sm text-gray-400">Pending</div>
+            <div className="text-3xl font-bold text-yellow-400">{pending}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-sm text-gray-400">Unresolved</div>
+            <div className="text-3xl font-bold text-orange-400">{unresolved}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-sm text-gray-400">Unverifiable</div>
+            <div className="text-3xl font-bold text-gray-300">{invalid}</div>
+          </div>
+        </div>
 
-          {/* Hit Rate */}
-          <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">Hit Rate</div>
-            <div className="text-4xl font-bold text-blue-400">
-              {overall.accuracy_percentage?.toFixed(0) || '—'}
-              {overall.accuracy_percentage !== null && '%'}
+        <div className="mt-4 text-sm text-gray-400">
+          {resolved < guardrails.min_resolved_for_grade ? (
+            <div>
+              Not enough resolved items to show grades/charts yet. Need{' '}
+              <strong className="text-gray-200">{guardrails.min_resolved_for_grade}</strong> resolved
+              (currently {resolved}).
             </div>
-            <div className="text-xs text-gray-500 mt-1">Binary accuracy</div>
-          </div>
-
-          {/* Calibration */}
-          <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">Calibration</div>
-            <div className="text-4xl font-bold text-purple-400">
-              {overall.calibration_error !== null
-                ? (overall.calibration_error * 100).toFixed(1)
-                : '—'}
-              {overall.calibration_error !== null && '%'}
+          ) : (
+            <div>
+              Mean Brier: <strong className="text-gray-200">{overall.mean_brier_score?.toFixed(3)}</strong>{' '}
+              · Accuracy: <strong className="text-gray-200">{overall.accuracy_percentage?.toFixed(0)}%</strong>
             </div>
-            <div className="text-xs text-gray-500 mt-1">Mean error</div>
-          </div>
-
-          {/* 30-Day Hit Rate */}
-          <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">30-Day Accuracy</div>
-            <div className="text-4xl font-bold text-cyan-400">
-              {overall.hit_rate_by_horizon?.['30_days'] !== null &&
-              overall.hit_rate_by_horizon?.['30_days'] !== undefined
-                ? (overall.hit_rate_by_horizon['30_days'] * 100).toFixed(0)
-                : '—'}
-              {overall.hit_rate_by_horizon?.['30_days'] !== null &&
-                overall.hit_rate_by_horizon?.['30_days'] !== undefined &&
-                '%'}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">Short-term</div>
-          </div>
+          )}
         </div>
       </Card>
 
-      {/* By-Domain Performance */}
-      {Object.keys(by_domain).length > 0 && (
-        <Card className="p-6 bg-gray-900/50 border-gray-800">
-          <h3 className="text-lg font-semibold text-white mb-4">Performance by Domain</h3>
+      {/* Ledger */}
+      <Card className="p-6 bg-gray-900/50 border-gray-800">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Recent items</h3>
+          <button
+            className="text-sm text-gray-400 hover:text-gray-200"
+            onClick={() => setShowAdvanced((v) => !v)}
+            type="button"
+          >
+            {showAdvanced ? 'Hide' : 'Show'} advanced metrics
+          </button>
+        </div>
+
+        {recent.length === 0 ? (
+          <div className="text-gray-400">No items yet.</div>
+        ) : (
           <div className="space-y-3">
-            {Object.entries(by_domain).map(([domain, data]) => {
-              const domainGrade = getAccuracyGrade(data.avg_brier);
-              const domainColor = getGradeColor(domainGrade);
+            {recent.slice(0, 10).map((f) => {
+              const v = verdictLabel(f);
               return (
-                <div key={domain} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`font-bold ${domainColor}`}>{domainGrade}</div>
-                    <div className="text-white capitalize">{domain}</div>
-                    <div className="text-sm text-gray-500">({data.count} forecasts)</div>
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    Brier: {data.avg_brier.toFixed(3)}
+                <div key={f.id} className="rounded border border-gray-800 bg-gray-950/30 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className={`text-xs font-semibold ${v.className}`}>{v.label}</div>
+                      <div className="text-sm text-white truncate">{f.claim}</div>
+                      <div className="mt-1 text-xs text-gray-400">
+                        p={f.probability} · {f.horizon_days}d · method={f.outcome_method || '—'}
+                        {f.outcome_measured_at ? ` · measured=${f.outcome_measured_at}` : ''}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500">Brier</div>
+                      <div className="text-sm text-gray-200">
+                        {f.brier_score !== null && f.brier_score !== undefined
+                          ? Number(f.brier_score).toFixed(3)
+                          : '—'}
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
-      {/* Recent Performance Trend */}
-      {recent_performance.length > 0 && (
-        <Card className="p-6 bg-gray-900/50 border-gray-800">
-          <h3 className="text-lg font-semibold text-white mb-4">Recent Performance (30 Days)</h3>
-          <div className="space-y-2">
-            {recent_performance.slice(-7).map((day) => (
-              <div key={day.date} className="flex items-center justify-between text-sm">
-                <div className="text-gray-400">{day.date}</div>
-                <div className="flex items-center gap-4">
-                  <div className="text-gray-500">{day.count} forecasts</div>
-                  <div className={getGradeColor(getAccuracyGrade(day.brier))}>
-                    Brier: {day.brier.toFixed(3)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Calibration Curve */}
-      {Object.keys(calibration_curve).length > 0 && (
-        <Card className="p-6 bg-gray-900/50 border-gray-800">
-          <h3 className="text-lg font-semibold text-white mb-4">Calibration Curve</h3>
-          <div className="text-sm text-gray-400 mb-4">
-            Perfect calibration: forecasts at 70% should happen 70% of the time
-          </div>
-          <div className="space-y-2">
-            {Object.entries(calibration_curve)
-              .sort(([a], [b]) => parseInt(a) - parseInt(b))
-              .map(([bin, data]) => {
-                const binMid = (parseInt(bin) + 0.5) * 10;
-                const isWellCalibrated = data.error < 0.10;
-                return (
-                  <div key={bin} className="flex items-center gap-3">
-                    <div className="text-gray-500 w-12">{binMid}%</div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        {/* Expected bar */}
-                        <div className="flex-1 bg-gray-700 rounded-full h-2 relative overflow-hidden">
-                          <div
-                            className="absolute h-full bg-blue-500/30"
-                            style={{ width: `${data.expected * 100}%` }}
-                          ></div>
-                          {/* Observed bar */}
-                          <div
-                            className={`absolute h-full ${
-                              isWellCalibrated ? 'bg-green-500' : 'bg-yellow-500'
-                            }`}
-                            style={{ width: `${data.observed * 100}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-gray-400 w-20">
-                          {(data.observed * 100).toFixed(0)}% ({data.count})
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-          <div className="mt-4 text-xs text-gray-500">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500/30 rounded"></div>
-                <span>Expected</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded"></div>
-                <span>Observed (well-calibrated)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-yellow-500 rounded"></div>
-                <span>Observed (needs adjustment)</span>
-              </div>
+      {/* Advanced metrics (progressive disclosure) */}
+      {showAdvanced && (
+        <Card className="p-6 bg-gray-900/30 border-gray-800">
+          <div className="text-sm text-gray-400 space-y-2">
+            <div>
+              <strong className="text-gray-200">Mean Brier:</strong>{' '}
+              {overall.mean_brier_score !== null ? overall.mean_brier_score.toFixed(4) : '—'}
+            </div>
+            <div>
+              <strong className="text-gray-200">Calibration error:</strong>{' '}
+              {overall.calibration_error !== null ? (overall.calibration_error * 100).toFixed(1) + '%' : '—'}
+              <span className="text-gray-500"> (hidden unless enough data)</span>
+            </div>
+            <div>
+              <strong className="text-gray-200">Mean log score:</strong>{' '}
+              {overall.mean_log_score !== null ? overall.mean_log_score.toFixed(4) : '—'}
             </div>
           </div>
         </Card>
@@ -288,9 +269,8 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
       {/* Methodology Note */}
       <Card className="p-4 bg-gray-900/30 border-gray-800">
         <div className="text-xs text-gray-500">
-          <strong className="text-gray-400">Methodology:</strong> Accuracy measured using Brier
-          score (proper scoring rule). Target: Brier &lt;0.20 (A grade), calibration error &lt;0.10.
-          Based on research by Tetlock et al. (Superforecasting) and Mellers et al. (2014).
+          <strong className="text-gray-400">Methodology:</strong> For resolved forecasts, we score with Brier/log
+          (proper scoring rules). We hide grades/calibration until sample sizes are large enough to be honest.
         </div>
       </Card>
     </div>

@@ -4,6 +4,7 @@ import importlib
 import os
 import unittest
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import psycopg
 
@@ -11,7 +12,9 @@ import psycopg
 class TestForecastMetricsApi(unittest.TestCase):
     def setUp(self) -> None:
         # Keep tests isolated from one another via explicit cleanup.
-        self.pg_dsn = os.environ.get("PG_DSN")
+        self._pg_dsn_raw = os.environ.get("PG_DSN")
+        self.pg_dsn = self._pg_dsn_raw
+        self._pg_schema = None
         if self.pg_dsn:
             try:
                 with psycopg.connect(self.pg_dsn):
@@ -19,20 +22,31 @@ class TestForecastMetricsApi(unittest.TestCase):
             except Exception:
                 # Local dev often runs without Postgres; treat as "not configured".
                 self.pg_dsn = None
+                self._pg_dsn_raw = None
+
+        # Use a unique schema per test run so dev data never pollutes assertions.
+        if self.pg_dsn and self._pg_dsn_raw:
+            self._pg_schema = f"test_ws61_metrics_{uuid4().hex[:10]}"
+            with psycopg.connect(self._pg_dsn_raw) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{self._pg_schema}"')
+                conn.commit()
+            # Include `public` so extension operator classes (e.g., gin_trgm_ops) resolve.
+            self.pg_dsn = f"{self._pg_dsn_raw} options='-c search_path={self._pg_schema},public'"
+            os.environ["PG_DSN"] = self.pg_dsn
 
         # Ensure flags are not leaking across tests.
         os.environ.pop("V3_FORECAST_TRACKING", None)
 
     def tearDown(self) -> None:
-        if not self.pg_dsn:
-            return
-        with psycopg.connect(self.pg_dsn) as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM forecast_updates WHERE updated_by = 'test:metrics_api'")
-                cur.execute("DELETE FROM forecasts WHERE created_by = 'test:metrics_api'")
-                cur.execute("DELETE FROM v3_reports WHERE id LIKE 'rep_test_metrics_%'")
-                cur.execute("DELETE FROM v3_investigations WHERE id LIKE 'inv_test_metrics_%'")
-            conn.commit()
+        if self._pg_schema and self._pg_dsn_raw:
+            try:
+                with psycopg.connect(self._pg_dsn_raw) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(f'DROP SCHEMA IF EXISTS "{self._pg_schema}" CASCADE')
+                    conn.commit()
+            finally:
+                os.environ["PG_DSN"] = self._pg_dsn_raw
 
     def test_metrics_flag_off_404(self) -> None:
         import web_app as web_app_mod
@@ -77,11 +91,15 @@ class TestForecastMetricsApi(unittest.TestCase):
         self.assertIn("by_domain", data)
         self.assertIn("recent_performance", data)
         self.assertIn("calibration_curve", data)
+        self.assertIn("recent_forecasts", data)
+        self.assertIn("guardrails", data)
 
         overall = data["overall"]
         self.assertEqual(overall["total_forecasts"], 0)
         self.assertEqual(overall["resolved_forecasts"], 0)
         self.assertEqual(overall["pending_forecasts"], 0)
+        self.assertEqual(overall["unresolved_forecasts"], 0)
+        self.assertEqual(overall["invalid_forecasts"], 0)
         self.assertIsNone(overall["mean_brier_score"])
         self.assertIsNone(overall["mean_log_score"])
         self.assertIsNone(overall["calibration_error"])
@@ -92,6 +110,11 @@ class TestForecastMetricsApi(unittest.TestCase):
         for k in ("7_days", "30_days", "90_days"):
             self.assertIn(k, hit)
             self.assertIsNone(hit[k])
+
+        guardrails = data["guardrails"]
+        self.assertIsInstance(guardrails, dict)
+        self.assertGreaterEqual(int(guardrails.get("min_resolved_for_grade", 0)), 1)
+        self.assertGreaterEqual(int(guardrails.get("min_resolved_for_calibration", 0)), 1)
 
     def test_metrics_flag_on_with_data_counts_and_scores(self) -> None:
         if not self.pg_dsn:
@@ -202,6 +225,8 @@ class TestForecastMetricsApi(unittest.TestCase):
         self.assertEqual(overall["total_forecasts"], 3)
         self.assertEqual(overall["resolved_forecasts"], 2)
         self.assertEqual(overall["pending_forecasts"], 1)
+        self.assertEqual(overall["unresolved_forecasts"], 0)
+        self.assertEqual(overall["invalid_forecasts"], 0)
 
         # Scores: mean of (0.09, 0.64) = 0.365
         self.assertIsInstance(overall["mean_brier_score"], (int, float))

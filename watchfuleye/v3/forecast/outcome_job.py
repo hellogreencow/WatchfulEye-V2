@@ -58,6 +58,7 @@ def run_forecast_outcome_job(
     processed = 0
     updated_resolved = 0
     updated_unresolved = 0
+    updated_invalid = 0
     errors: list[str] = []
 
     try:
@@ -118,7 +119,20 @@ def run_forecast_outcome_job(
                 previous_state = _audit_state(fc)
 
                 try:
-                    outcome = asyncio.run(measure_forecast_outcome(forecast_id, fc))
+                    if _is_unverifiable_forecast(fc):
+                        # Keep the row for auditability, but do not "resolve" non-verifiable meta-claims.
+                        outcome = {
+                            "outcome_status": "invalid",
+                            "outcome_result": None,
+                            "outcome_confidence": 0.0,
+                            "outcome_method": "invalid",
+                            "outcome_measured_at": datetime.now(timezone.utc),
+                            "outcome_evidence": {
+                                "reason": "Non-verifiable/meta claim (excluded from scoring)",
+                            },
+                        }
+                    else:
+                        outcome = asyncio.run(measure_forecast_outcome(forecast_id, fc))
                 except Exception as e:
                     # Cron/CLI job: treat any asyncio issues as a measurement failure but do not crash.
                     errors.append(f"{forecast_id}: measurement error: {e}")
@@ -214,6 +228,8 @@ def run_forecast_outcome_job(
                     processed += 1
                     if outcome.get("outcome_status") == "resolved":
                         updated_resolved += 1
+                    elif outcome.get("outcome_status") == "invalid":
+                        updated_invalid += 1
                     else:
                         updated_unresolved += 1
                 except Exception as e:
@@ -223,16 +239,23 @@ def run_forecast_outcome_job(
 
         _log(
             f"[forecast_outcome_job] processed={processed} resolved={updated_resolved} "
-            f"unresolved={updated_unresolved} errors={len(errors)}"
+            f"unresolved={updated_unresolved} invalid={updated_invalid} errors={len(errors)}"
         )
         return {
             "processed": processed,
             "resolved": updated_resolved,
             "unresolved": updated_unresolved,
+            "invalid": updated_invalid,
             "errors": errors,
         }
     except Exception as e:
-        return {"processed": processed, "resolved": updated_resolved, "unresolved": updated_unresolved, "errors": errors + [str(e)]}
+        return {
+            "processed": processed,
+            "resolved": updated_resolved,
+            "unresolved": updated_unresolved,
+            "invalid": updated_invalid,
+            "errors": errors + [str(e)],
+        }
 
 
 def _audit_state(forecast_row: dict[str, Any]) -> dict[str, Any]:
@@ -257,6 +280,34 @@ def _iso(dt: Any) -> str | None:
         except Exception:
             return dt.isoformat()
     return None
+
+
+def _is_unverifiable_forecast(forecast_row: dict[str, Any]) -> bool:
+    """Heuristic guardrail: forecasts that cannot be resolved against external reality.
+
+    We keep them for auditability, but mark them `invalid` so they don't corrupt track record metrics.
+    """
+    claim = (forecast_row.get("claim") or "").strip()
+    if not claim:
+        return True
+
+    # If there is no evidence attached, treat as non-verifiable for now (often a placeholder prediction).
+    eids = forecast_row.get("evidence_ids")
+    if isinstance(eids, list) and len(eids) == 0:
+        return True
+
+    claim_lower = claim.lower()
+    meta_keywords = (
+        "dataset",
+        "index",
+        "retrieval",
+        "query",
+        "coverage",
+        "search",
+        "no matching articles",
+        "evidence-first mode",
+    )
+    return any(k in claim_lower for k in meta_keywords)
 
 
 def _json_sanitize(obj: Any) -> Any:

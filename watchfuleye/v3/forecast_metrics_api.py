@@ -54,6 +54,13 @@ def get_forecast_metrics():
     if not pg_dsn:
         return jsonify({"error": "Database not configured"}), 500
 
+    # UX guardrails: never imply statistical confidence at tiny sample sizes.
+    guardrails = {
+        "min_resolved_for_grade": 20,
+        "min_resolved_for_calibration": 50,
+        "min_resolved_for_domain": 10,
+    }
+
     try:
         import psycopg
         from psycopg.rows import dict_row
@@ -87,7 +94,9 @@ def get_forecast_metrics():
 
         total_forecasts = len(forecasts)
         resolved = [f for f in forecasts if f.get("outcome_status") == "resolved"]
-        pending = [f for f in forecasts if f.get("outcome_status") != "resolved"]
+        pending = [f for f in forecasts if f.get("outcome_status") == "pending"]
+        unresolved = [f for f in forecasts if f.get("outcome_status") == "unresolved"]
+        invalid = [f for f in forecasts if f.get("outcome_status") == "invalid"]
 
         if total_forecasts == 0:
             return jsonify(
@@ -96,6 +105,8 @@ def get_forecast_metrics():
                         "total_forecasts": 0,
                         "resolved_forecasts": 0,
                         "pending_forecasts": 0,
+                        "unresolved_forecasts": 0,
+                        "invalid_forecasts": 0,
                         "mean_brier_score": None,
                         "mean_log_score": None,
                         "calibration_error": None,
@@ -105,6 +116,8 @@ def get_forecast_metrics():
                     "by_domain": {},
                     "recent_performance": [],
                     "calibration_curve": {},
+                    "recent_forecasts": [],
+                    "guardrails": guardrails,
                 }
             )
 
@@ -123,17 +136,23 @@ def get_forecast_metrics():
         # Calculate hit rates by horizon (resolved only)
         hit_rate_by_horizon = _calculate_hit_rate_by_horizon(resolved)
 
+        recent_forecasts = [_serialize_recent_forecast(f) for f in forecasts[:25]]
+
         return jsonify({
             "overall": {
                 **overall_stats,
                 "total_forecasts": total_forecasts,
                 "resolved_forecasts": len(resolved),
                 "pending_forecasts": len(pending),
+                "unresolved_forecasts": len(unresolved),
+                "invalid_forecasts": len(invalid),
                 "hit_rate_by_horizon": hit_rate_by_horizon,
             },
             "by_domain": by_domain,
             "recent_performance": recent_performance,
             "calibration_curve": calibration_curve,
+            "recent_forecasts": recent_forecasts,
+            "guardrails": guardrails,
         })
 
     except Exception as e:
@@ -251,3 +270,28 @@ def _calculate_hit_rate_by_horizon(forecasts: list[dict[str, Any]]) -> dict[str,
             result[label] = None
 
     return result
+
+
+def _serialize_recent_forecast(f: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-serializable subset for the UI ledger."""
+    def _iso_any(v: Any) -> str | None:
+        try:
+            return v.isoformat() if v is not None else None
+        except Exception:
+            return None
+
+    return {
+        "id": f.get("id"),
+        "claim": f.get("claim"),
+        "probability": f.get("probability"),
+        "horizon_days": f.get("horizon_days"),
+        "horizon_date": _iso_any(f.get("horizon_date")),
+        "outcome_status": f.get("outcome_status"),
+        "outcome_result": f.get("outcome_result"),
+        "brier_score": f.get("brier_score"),
+        "log_score": f.get("log_score"),
+        "outcome_method": f.get("outcome_method"),
+        "outcome_measured_at": _iso_any(f.get("outcome_measured_at")),
+        "created_at": _iso_any(f.get("created_at")),
+        "tags": f.get("tags") or [],
+    }
