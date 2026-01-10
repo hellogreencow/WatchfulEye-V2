@@ -94,4 +94,44 @@ jobs:
           CI: "false"
         run: npm run build
 
+  e2e_smoke:
+    name: E2E Smoke (ws6 alerts)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: watchfuleye
+          POSTGRES_USER: watchful
+          POSTGRES_PASSWORD: watchfulpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U watchful -d watchfuleye"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      PG_DSN: dbname=watchfuleye user=watchful password=watchfulpass host=localhost port=5432
+      DISABLE_SEMANTIC: "true"
+      SUPABASE_URL: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Smoke (schema → seed → evaluate → event written)
+        run: |
+          python scripts/ci/e2e_smoke_ws6_alerts.py
+
 
