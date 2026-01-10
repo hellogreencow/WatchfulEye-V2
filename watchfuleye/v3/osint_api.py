@@ -12,10 +12,7 @@ Flag gates:
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
-import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -25,6 +22,7 @@ from flask import Blueprint, jsonify, request
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from watchfuleye.ingestion.url_utils import url_hash
 from watchfuleye.storage.postgres_schema import ensure_postgres_schema
 from watchfuleye.v3.flags import is_v3_connectors_enabled, is_v3_osint_enabled
 
@@ -173,7 +171,7 @@ def promote_post_to_article(post_row_id: str):
             canonical_url = row.get("url") or _fallback_x_url(row.get("handle"), row.get("post_id"))
             title = f"OSINT @{row.get('handle')}: {str(row.get('content_text') or '')[:80]}".strip()
             excerpt = (row.get("content_text") or "")[:280] if row.get("content_text") else None
-            url_hash = _sha256_hex(str(canonical_url))
+            url_hash_value = url_hash(str(canonical_url))
             raw = {
                 "osint": True,
                 "platform": row.get("platform"),
@@ -191,12 +189,13 @@ def promote_post_to_article(post_row_id: str):
                 )
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
                 ON CONFLICT (canonical_url) DO UPDATE
-                  SET updated_at = now()
+                  SET updated_at = now(),
+                      raw = EXCLUDED.raw
                 RETURNING id
                 """,
                 (
                     str(canonical_url),
-                    url_hash,
+                    url_hash_value,
                     title or "OSINT post",
                     None,
                     excerpt,
@@ -207,7 +206,10 @@ def promote_post_to_article(post_row_id: str):
                     Jsonb(raw),
                 ),
             )
-            article_id = int(cur.fetchone()["id"])
+            result = cur.fetchone()
+            if not result:
+                return jsonify({"error": "Failed to create or update article"}), 500
+            article_id = int(result["id"])
 
             cur.execute(
                 """
@@ -220,10 +222,6 @@ def promote_post_to_article(post_row_id: str):
         conn.commit()
 
     return jsonify({"article_id": article_id}), 200
-
-
-def _sha256_hex(s: str) -> str:
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
 def _parse_dt(v: Any) -> datetime | None:
