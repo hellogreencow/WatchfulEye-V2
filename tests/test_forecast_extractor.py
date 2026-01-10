@@ -244,6 +244,33 @@ class TestForecastExtraction(unittest.TestCase):
         iran_found = any("iran" in eid.lower() for eid in fc2["entity_ids"])
         self.assertTrue(iran_found)
 
+    def test_extract_from_report_builder_prediction_dicts(self) -> None:
+        """WS4 report_builder emits dict predictions; extractor must handle them."""
+        from watchfuleye.v3.investigations.report_builder import build_report_content
+
+        report_content = build_report_content("AAPL", evidence=[])
+        forecasts = extract_forecasts_from_report("rpt_1", report_content, "inv_1")
+
+        # report_builder always returns 3 structured predictions (placeholders when no evidence)
+        self.assertEqual(len(forecasts), 3)
+        for fc in forecasts:
+            self.assertIn("claim", fc)
+            self.assertIsInstance(fc["claim"], str)
+            self.assertIsInstance(fc["probability"], float)
+            self.assertIsInstance(fc["horizon_days"], int)
+            self.assertGreater(fc["horizon_days"], 0)
+
+    def test_extract_dict_horizon_and_evidence_ids(self) -> None:
+        report_content = {
+            "predictions": [
+                {"claim": "AAPL rises", "probability": 0.75, "horizon": "7d", "evidence_ids": [123, "456"]},
+            ]
+        }
+        forecasts = extract_forecasts_from_report("rpt_1", report_content, "inv_1")
+        self.assertEqual(len(forecasts), 1)
+        self.assertEqual(forecasts[0]["horizon_days"], 7)
+        self.assertEqual(forecasts[0]["evidence_ids"], ["123", "456"])
+
 
 if __name__ == "__main__":
     unittest.main()
