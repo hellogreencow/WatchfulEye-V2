@@ -2670,9 +2670,11 @@ function MinimalistDashboard({
   // Non-local environments still require the explicit flag.
   const isLocalhost =
     typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '::1');
   const isV3ForecastTrackingEnabled =
-    isLocalhost || process.env.REACT_APP_V3_FORECAST_TRACKING === 'true';
+    isLocalhost || (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true';
   const isAdmin = auth.user?.role === 'admin';
 
   // If the user clicked "AI Deep Analysis" on a public Briefings card, we stash the article in localStorage,
@@ -3079,11 +3081,13 @@ function MinimalistDashboard({
                   WS6.1 — Track Record
                 </CardTitle>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Local dev shows this automatically on `localhost` so you can validate the loop fast.
+                  {isLocalhost
+                    ? 'Local dev shows this automatically on localhost so you can validate the loop fast.'
+                    : 'Enable with REACT_APP_V3_FORECAST_TRACKING=true.'}
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                <AccuracyPanel />
+                <AccuracyPanel apiBaseUrl={API_BASE_URL} />
 
                 {isAdmin ? (
                   <ApiKeysPanel apiBaseUrl={API_BASE_URL} />
