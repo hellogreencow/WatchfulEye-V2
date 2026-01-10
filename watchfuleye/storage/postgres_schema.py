@@ -184,8 +184,6 @@ SCHEMA_STATEMENTS: list[str] = [
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     """,
-    # Use cosine distance operator class; our queries use `<=>` (cosine distance).
-    "CREATE INDEX IF NOT EXISTS idx_article_embeddings_hnsw ON article_embeddings USING hnsw (embedding vector_cosine_ops);",
     """
     CREATE TABLE IF NOT EXISTS article_embeddings_voyage (
       article_id BIGINT PRIMARY KEY,
@@ -435,6 +433,18 @@ def ensure_postgres_schema(pg_dsn: str, *, statements: Optional[Iterable[str]] =
 
             _ensure_dim("article_embeddings", 1536)
             _ensure_dim("article_embeddings_voyage", 1024)
+
+            # Create vector indexes best-effort.
+            #
+            # Some environments may not have pgvector HNSW support available; schema creation
+            # must still succeed so the app can run with FTS fallback.
+            try:
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_article_embeddings_hnsw "
+                    "ON article_embeddings USING hnsw (embedding vector_cosine_ops);"
+                )
+            except Exception:
+                pass
 
             # Create voyage vector index after migration (older installs may have had 2048 dims).
             try:
