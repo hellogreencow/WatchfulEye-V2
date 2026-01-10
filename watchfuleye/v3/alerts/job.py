@@ -273,6 +273,12 @@ def _eval_recommendation_alpha(
         rows = cur.fetchall()
 
     for row in rows:
+        def _num(v: Any) -> float | None:
+            try:
+                return float(v) if v is not None else None
+            except Exception:
+                return None
+
         payload = {
             "rule_type": "recommendation_alpha",
             "recommendation_id": row.get("recommendation_id"),
@@ -280,9 +286,9 @@ def _eval_recommendation_alpha(
             "action": row.get("action"),
             "horizon_days": row.get("horizon_days"),
             "benchmark_symbol": row.get("benchmark_symbol"),
-            "rec_return": row.get("rec_return"),
-            "benchmark_return": row.get("benchmark_return"),
-            "alpha": row.get("alpha"),
+            "rec_return": _num(row.get("rec_return")),
+            "benchmark_return": _num(row.get("benchmark_return")),
+            "alpha": _num(row.get("alpha")),
             "computed_at": _iso(row.get("computed_at")),
         }
         with conn.cursor() as cur2:

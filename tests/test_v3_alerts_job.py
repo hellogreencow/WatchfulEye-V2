@@ -101,6 +101,70 @@ class TestV3AlertsJob(unittest.TestCase):
                 cnt = int(cur.fetchone()[0])
                 self.assertGreaterEqual(cnt, 1)
 
+    def test_recommendation_alpha_rule_writes_event(self) -> None:
+        assert self.pg_dsn is not None
+        rule_id = "t_alert_job_alpha_1"
+
+        with psycopg.connect(self.pg_dsn) as conn:
+            with conn.cursor() as cur:
+                # Create a minimal analysis row
+                cur.execute(
+                    """
+                    INSERT INTO analyses (content, model_used, article_count, processing_time, topic, raw_response_json)
+                    VALUES ('seed', 'test', 0, 0.0, 'test', '{}'::jsonb)
+                    RETURNING id
+                    """
+                )
+                analysis_id = int(cur.fetchone()[0])
+
+                # Create a recommendation
+                cur.execute(
+                    """
+                    INSERT INTO recommendations (analysis_id, action, ticker, rationale)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (analysis_id, "BUY", "TEST", "seed"),
+                )
+                rec_id = int(cur.fetchone()[0])
+
+                # Create a performance snapshot with alpha above threshold
+                cur.execute(
+                    """
+                    INSERT INTO recommendation_performance (
+                      recommendation_id, horizon_days, benchmark_symbol,
+                      rec_return, benchmark_return, alpha
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (recommendation_id, horizon_days, benchmark_symbol) DO UPDATE SET
+                      rec_return=excluded.rec_return,
+                      benchmark_return=excluded.benchmark_return,
+                      alpha=excluded.alpha,
+                      computed_at=now()
+                    """,
+                    (rec_id, 30, "SPY", 0.10, 0.05, 0.05),
+                )
+
+                # Create rule
+                cur.execute(
+                    """
+                    INSERT INTO alert_rules (id, name, enabled, rule_type, config)
+                    VALUES (%s, %s, TRUE, 'recommendation_alpha', %s::jsonb)
+                    ON CONFLICT (id) DO UPDATE SET enabled=TRUE, config=excluded.config
+                    """,
+                    (rule_id, "Test alpha", '{"horizon_days": 30, "benchmark_symbol": "SPY", "min_alpha": 0.01}'),
+                )
+                conn.commit()
+
+        out = run_alerts_job(self.pg_dsn, limit_rules=10)
+        self.assertEqual(out.get("errors"), [])
+
+        with psycopg.connect(self.pg_dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM alert_events WHERE rule_id=%s;", (rule_id,))
+                cnt = int(cur.fetchone()[0])
+                self.assertGreaterEqual(cnt, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
