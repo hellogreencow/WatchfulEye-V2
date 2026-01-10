@@ -363,6 +363,43 @@ SCHEMA_STATEMENTS: list[str] = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_forecast_updates_forecast_id ON forecast_updates(forecast_id);",
     "CREATE INDEX IF NOT EXISTS idx_forecast_updates_updated_at ON forecast_updates(updated_at DESC);",
+
+    # =====================
+    # WS6 (V3): Alerts + Monitoring (rules + event log)
+    #
+    # NOTE: WS0 owns schemas/contracts. WS6 implements evaluation + delivery.
+    # =====================
+    """
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      rule_type TEXT NOT NULL, -- forecast_outcome|recommendation_alpha|term_trend|custom
+      config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      channels TEXT[] NOT NULL DEFAULT ARRAY['in_app']::text[],
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_evaluated_at TIMESTAMPTZ
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_rule_type ON alert_rules(rule_type);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_updated_at ON alert_rules(updated_at DESC);",
+
+    """
+    CREATE TABLE IF NOT EXISTS alert_events (
+      id BIGSERIAL PRIMARY KEY,
+      rule_id TEXT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL, -- fired|delivered|error
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      delivered_at TIMESTAMPTZ,
+      delivery_error TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_alert_events_rule_id_created ON alert_events(rule_id, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_events_created_at ON alert_events(created_at DESC);",
 ]
 
 
