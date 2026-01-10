@@ -21,6 +21,7 @@ import type { AnalysisStructured } from './lib/analysisTypes';
 import { MessageActions, SmartSuggestions, InsightBadge, exportConversation } from './components/ChatEnhancements';
 import RAGAnimation from './components/RAGAnimation';
 import { AccuracyPanel } from './components/forecast/AccuracyPanel';
+import { ApiKeysPanel } from './components/forecast/ApiKeysPanel';
 
 // API Base URL resolution
 // - Default: relative `/api` (nginx reverse proxy in production)
@@ -4721,6 +4722,18 @@ function AdminDashboard() {
         >
           User Management
         </button>
+        {process.env.REACT_APP_V3_FORECAST_TRACKING === 'true' && (
+          <button
+            className={`py-2 px-4 text-sm font-medium ${
+              activeTab === 'integrations' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('integrations')}
+          >
+            Integrations
+          </button>
+        )}
       </div>
 
       {/* Admin dashboard content */}
@@ -4873,6 +4886,11 @@ function AdminDashboard() {
       {/* User management content */}
       {activeTab === 'users' && (
         <UserManagement />
+      )}
+
+      {/* Integrations (WS6.1) */}
+      {process.env.REACT_APP_V3_FORECAST_TRACKING === 'true' && activeTab === 'integrations' && (
+        <ApiKeysPanel apiBaseUrl={API_BASE_URL} />
       )}
     </div>
   );
