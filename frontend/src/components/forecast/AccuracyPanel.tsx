@@ -192,8 +192,14 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
             </div>
           ) : (
             <div>
-              Mean Brier: <strong className="text-gray-200">{overall.mean_brier_score?.toFixed(3)}</strong>{' '}
-              · Accuracy: <strong className="text-gray-200">{overall.accuracy_percentage?.toFixed(0)}%</strong>
+              Mean Brier:{' '}
+              <strong className="text-gray-200">
+                {typeof overall.mean_brier_score === 'number' ? overall.mean_brier_score.toFixed(3) : '—'}
+              </strong>{' '}
+              · Accuracy:{' '}
+              <strong className="text-gray-200">
+                {typeof overall.accuracy_percentage === 'number' ? `${overall.accuracy_percentage.toFixed(0)}%` : '—'}
+              </strong>
             </div>
           )}
         </div>
@@ -207,6 +213,8 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
             className="text-sm text-gray-400 hover:text-gray-200"
             onClick={() => setShowAdvanced((v) => !v)}
             type="button"
+            aria-expanded={showAdvanced}
+            aria-controls="ws61-advanced-metrics"
           >
             {showAdvanced ? 'Hide' : 'Show'} advanced metrics
           </button>
@@ -247,20 +255,22 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
 
       {/* Advanced metrics (progressive disclosure) */}
       {showAdvanced && (
-        <Card className="p-6 bg-gray-900/30 border-gray-800">
+        <Card className="p-6 bg-gray-900/30 border-gray-800" id="ws61-advanced-metrics">
           <div className="text-sm text-gray-400 space-y-2">
             <div>
               <strong className="text-gray-200">Mean Brier:</strong>{' '}
-              {overall.mean_brier_score !== null ? overall.mean_brier_score.toFixed(4) : '—'}
+              {typeof overall.mean_brier_score === 'number' ? overall.mean_brier_score.toFixed(4) : '—'}
             </div>
             <div>
               <strong className="text-gray-200">Calibration error:</strong>{' '}
-              {overall.calibration_error !== null ? (overall.calibration_error * 100).toFixed(1) + '%' : '—'}
+              {resolved >= guardrails.min_resolved_for_calibration && typeof overall.calibration_error === 'number'
+                ? (overall.calibration_error * 100).toFixed(1) + '%'
+                : '—'}
               <span className="text-gray-500"> (hidden unless enough data)</span>
             </div>
             <div>
               <strong className="text-gray-200">Mean log score:</strong>{' '}
-              {overall.mean_log_score !== null ? overall.mean_log_score.toFixed(4) : '—'}
+              {typeof overall.mean_log_score === 'number' ? overall.mean_log_score.toFixed(4) : '—'}
             </div>
           </div>
         </Card>

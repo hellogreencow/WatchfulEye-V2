@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import psycopg
+from psycopg import sql
 
 
 class TestForecastMetricsApi(unittest.TestCase):
     def setUp(self) -> None:
+        self._env_v3_forecast_tracking = os.environ.get("V3_FORECAST_TRACKING")
         # Keep tests isolated from one another via explicit cleanup.
         self._pg_dsn_raw = os.environ.get("PG_DSN")
         self.pg_dsn = self._pg_dsn_raw
@@ -29,7 +31,7 @@ class TestForecastMetricsApi(unittest.TestCase):
             self._pg_schema = f"test_ws61_metrics_{uuid4().hex[:10]}"
             with psycopg.connect(self._pg_dsn_raw) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{self._pg_schema}"')
+                    cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(self._pg_schema)))
                 conn.commit()
             # Include `public` so extension operator classes (e.g., gin_trgm_ops) resolve.
             self.pg_dsn = f"{self._pg_dsn_raw} options='-c search_path={self._pg_schema},public'"
@@ -43,10 +45,17 @@ class TestForecastMetricsApi(unittest.TestCase):
             try:
                 with psycopg.connect(self._pg_dsn_raw) as conn:
                     with conn.cursor() as cur:
-                        cur.execute(f'DROP SCHEMA IF EXISTS "{self._pg_schema}" CASCADE')
+                        cur.execute(
+                            sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(self._pg_schema))
+                        )
                     conn.commit()
             finally:
                 os.environ["PG_DSN"] = self._pg_dsn_raw
+        # Restore prior flag value (or unset) to avoid cross-test pollution.
+        if self._env_v3_forecast_tracking is None:
+            os.environ.pop("V3_FORECAST_TRACKING", None)
+        else:
+            os.environ["V3_FORECAST_TRACKING"] = self._env_v3_forecast_tracking
 
     def test_metrics_flag_off_404(self) -> None:
         import web_app as web_app_mod
@@ -93,6 +102,11 @@ class TestForecastMetricsApi(unittest.TestCase):
         self.assertIn("calibration_curve", data)
         self.assertIn("recent_forecasts", data)
         self.assertIn("guardrails", data)
+        self.assertIsInstance(data["recent_forecasts"], list)
+        if data["recent_forecasts"]:
+            self.assertIsInstance(data["recent_forecasts"][0], dict)
+            for k in ("id", "claim", "probability", "outcome_status"):
+                self.assertIn(k, data["recent_forecasts"][0])
 
         overall = data["overall"]
         self.assertEqual(overall["total_forecasts"], 0)

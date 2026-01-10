@@ -291,11 +291,6 @@ def _is_unverifiable_forecast(forecast_row: dict[str, Any]) -> bool:
     if not claim:
         return True
 
-    # If there is no evidence attached, treat as non-verifiable for now (often a placeholder prediction).
-    eids = forecast_row.get("evidence_ids")
-    if isinstance(eids, list) and len(eids) == 0:
-        return True
-
     claim_lower = claim.lower()
     meta_keywords = (
         "dataset",

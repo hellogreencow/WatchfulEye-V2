@@ -7,10 +7,12 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import psycopg
+from psycopg import sql
 
 
 class TestForecastOutcomeJob(unittest.TestCase):
     def setUp(self) -> None:
+        self._env_v3_forecast_tracking = os.environ.get("V3_FORECAST_TRACKING")
         self._pg_dsn_raw = os.environ.get("PG_DSN")
         self.pg_dsn = self._pg_dsn_raw
         self._pg_schema = None
@@ -27,7 +29,7 @@ class TestForecastOutcomeJob(unittest.TestCase):
             self._pg_schema = f"test_ws61_outcome_{uuid4().hex[:10]}"
             with psycopg.connect(self._pg_dsn_raw) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{self._pg_schema}"')
+                    cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(self._pg_schema)))
                 conn.commit()
             # Include `public` so extension operator classes (e.g., gin_trgm_ops) resolve.
             self.pg_dsn = f"{self._pg_dsn_raw} options='-c search_path={self._pg_schema},public'"
@@ -36,15 +38,21 @@ class TestForecastOutcomeJob(unittest.TestCase):
         os.environ["V3_FORECAST_TRACKING"] = "true"
 
     def tearDown(self) -> None:
-        os.environ.pop("V3_FORECAST_TRACKING", None)
         if self._pg_schema and self._pg_dsn_raw:
             try:
                 with psycopg.connect(self._pg_dsn_raw) as conn:
                     with conn.cursor() as cur:
-                        cur.execute(f'DROP SCHEMA IF EXISTS "{self._pg_schema}" CASCADE')
+                        cur.execute(
+                            sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(self._pg_schema))
+                        )
                     conn.commit()
             finally:
                 os.environ["PG_DSN"] = self._pg_dsn_raw
+        # Restore prior flag value (or unset) to avoid cross-test pollution.
+        if self._env_v3_forecast_tracking is None:
+            os.environ.pop("V3_FORECAST_TRACKING", None)
+        else:
+            os.environ["V3_FORECAST_TRACKING"] = self._env_v3_forecast_tracking
 
     def test_job_updates_forecast_and_writes_audit(self) -> None:
         if not self.pg_dsn:
