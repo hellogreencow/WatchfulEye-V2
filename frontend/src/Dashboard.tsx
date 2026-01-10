@@ -2666,6 +2666,17 @@ function MinimalistDashboard({
   const auth = useAuth();
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
 
+  // Localhost dev convenience: always show WS6.1 panels post-login without needing REACT_APP flags.
+  // Non-local environments still require the explicit flag.
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '::1');
+  const isV3ForecastTrackingEnabled =
+    isLocalhost || (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true';
+  const isAdmin = auth.user?.role === 'admin';
+
   // If the user clicked "AI Deep Analysis" on a public Briefings card, we stash the article in localStorage,
   // then route them to /login (or /dashboard if already authed). Once here and authenticated, auto-open analysis.
   useEffect(() => {
@@ -3060,6 +3071,35 @@ function MinimalistDashboard({
             </div>
           </div>
         </div>
+
+        {/* WS6.1 (post-login, localhost-first): Track Record + Integrations */}
+        {isV3ForecastTrackingEnabled && (
+          <div className="px-0 sm:px-2 lg:px-4">
+            <Card className="bg-white/70 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-slate-900 dark:text-slate-100">
+                  WS6.1 — Track Record
+                </CardTitle>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {isLocalhost
+                    ? 'Local dev shows this automatically on localhost so you can validate the loop fast.'
+                    : 'Enable with REACT_APP_V3_FORECAST_TRACKING=true.'}
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <AccuracyPanel apiBaseUrl={API_BASE_URL} />
+
+                {isAdmin ? (
+                  <ApiKeysPanel apiBaseUrl={API_BASE_URL} />
+                ) : (
+                  <div className="text-sm text-slate-600 dark:text-slate-400">
+                    Integrations are admin-only.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Search */}
         <motion.div

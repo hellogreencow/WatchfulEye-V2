@@ -46,35 +46,35 @@ interface ForecastMetrics {
   };
 }
 
-export function AccuracyPanel() {
+export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
   const [metrics, setMetrics] = useState<ForecastMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchMetrics();
-  }, []);
-
-  const fetchMetrics = async () => {
-    try {
-      const response = await fetch('/api/v3/forecast/metrics');
-      if (response.status === 404) {
-        // Feature not enabled
-        setError('Forecast tracking not enabled');
+    const fetchMetrics = async () => {
+      try {
+        const base = (apiBaseUrl || '').replace(/\/+$/, '');
+        const response = await fetch(`${base}/api/v3/forecast/metrics`);
+        if (response.status === 404) {
+          // Feature not enabled
+          setError('Forecast tracking not enabled');
+          setLoading(false);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Failed to fetch metrics: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setMetrics(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load metrics');
+      } finally {
         setLoading(false);
-        return;
       }
-      if (!response.ok) {
-        throw new Error(`Failed to fetch metrics: ${response.statusText}`);
-      }
-      const data = await response.json();
-      setMetrics(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load metrics');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchMetrics();
+  }, [apiBaseUrl]);
 
   if (loading) {
     return (
