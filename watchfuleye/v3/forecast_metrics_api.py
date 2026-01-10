@@ -109,7 +109,7 @@ def get_forecast_metrics():
             )
 
         # Calculate overall metrics
-        overall_stats = calculate_overall_metrics(forecasts)
+        overall_stats = calculate_overall_metrics(resolved)
 
         # Calculate by-domain metrics
         by_domain = _calculate_domain_metrics(forecasts)

@@ -140,7 +140,7 @@ async def _measure_via_market_data(forecast: dict[str, Any]) -> dict[str, Any]:
         }
 
     ticker = tickers[0]  # Use first ticker
-    created_at = forecast.get("created_at") or datetime.utcnow()
+    created_at = forecast.get("created_at") or datetime.now(timezone.utc)
     horizon_date = forecast["horizon_date"]
 
     # Try Yahoo Finance first, fallback to Alpha Vantage
@@ -353,7 +353,7 @@ async def _measure_via_event_feeds(forecast: dict[str, Any]) -> dict[str, Any]:
             "outcome_evidence": {"error": "No country entities found"},
         }
 
-    created_at = forecast.get("created_at") or datetime.utcnow()
+    created_at = forecast.get("created_at") or datetime.now(timezone.utc)
     horizon_date = forecast["horizon_date"]
     claim = forecast["claim"]
 

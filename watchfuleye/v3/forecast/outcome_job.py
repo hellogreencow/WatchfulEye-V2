@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 import psycopg
@@ -53,71 +53,83 @@ def run_forecast_outcome_job(
 
     if not is_v3_forecast_tracking_enabled():
         return {"skipped": True, "reason": "V3_FORECAST_TRACKING disabled"}
-
-    ensure_postgres_schema(pg_dsn)
-
     now = datetime.now(timezone.utc)
+    retry_cutoff = now - timedelta(hours=6)
     processed = 0
     updated_resolved = 0
     updated_unresolved = 0
     errors: list[str] = []
 
     try:
+        # Ensure schema inside the try so Postgres outages return a summary (never raise).
+        ensure_postgres_schema(pg_dsn)
+
         with psycopg.connect(pg_dsn, row_factory=dict_row) as conn:
-            # Select candidates. SKIP LOCKED allows multiple workers safely.
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT
-                      id,
-                      report_id,
-                      investigation_id,
-                      claim,
-                      probability,
-                      horizon_days,
-                      horizon_date,
-                      entity_ids,
-                      entity_types,
-                      evidence_ids,
-                      assumptions,
-                      tags,
-                      created_at,
-                      updated_at,
-                      outcome_status,
-                      outcome_result,
-                      outcome_confidence,
-                      outcome_measured_at,
-                      outcome_method,
-                      outcome_evidence,
-                      brier_score,
-                      log_score,
-                      calibration_bin
-                    FROM forecasts
-                    WHERE horizon_date <= %s
-                      AND outcome_status IN ('pending', 'unresolved')
-                    ORDER BY horizon_date ASC, created_at ASC
-                    LIMIT %s
-                    FOR UPDATE SKIP LOCKED
-                    """,
-                    (now, int(limit)),
-                )
-                rows = cur.fetchall()
+            # Process one row at a time so commits don't release locks for unprocessed rows.
+            while processed < int(limit):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                          id,
+                          report_id,
+                          investigation_id,
+                          claim,
+                          probability,
+                          horizon_days,
+                          horizon_date,
+                          entity_ids,
+                          entity_types,
+                          evidence_ids,
+                          assumptions,
+                          tags,
+                          created_at,
+                          updated_at,
+                          outcome_status,
+                          outcome_result,
+                          outcome_confidence,
+                          outcome_measured_at,
+                          outcome_method,
+                          outcome_evidence,
+                          brier_score,
+                          log_score,
+                          calibration_bin
+                        FROM forecasts
+                        WHERE horizon_date <= %s
+                          AND (
+                            outcome_status = 'pending'
+                            OR (
+                              outcome_status = 'unresolved'
+                              AND (outcome_measured_at IS NULL OR outcome_measured_at <= %s)
+                            )
+                          )
+                        ORDER BY horizon_date ASC, created_at ASC
+                        LIMIT 1
+                        FOR UPDATE SKIP LOCKED
+                        """,
+                        (now, retry_cutoff),
+                    )
+                    fc = cur.fetchone()
 
-            for fc in rows:
+                if not fc:
+                    break
+
                 forecast_id = fc["id"]
-
                 previous_state = _audit_state(fc)
 
                 try:
                     outcome = asyncio.run(measure_forecast_outcome(forecast_id, fc))
-                except RuntimeError:
-                    # If an event loop is already running (rare in CLI), fall back.
-                    outcome = asyncio.get_event_loop().run_until_complete(
-                        measure_forecast_outcome(forecast_id, fc)
-                    )
                 except Exception as e:
+                    # Cron/CLI job: treat any asyncio issues as a measurement failure but do not crash.
                     errors.append(f"{forecast_id}: measurement error: {e}")
-                    continue
+                    outcome = {
+                        "outcome_status": "unresolved",
+                        "outcome_result": None,
+                        "outcome_confidence": 0.0,
+                        "outcome_method": "error",
+                        "outcome_measured_at": datetime.now(timezone.utc),
+                        "outcome_evidence": {"error": str(e)},
+                    }
 
                 # Compute scoring fields if resolved.
                 brier_score = None

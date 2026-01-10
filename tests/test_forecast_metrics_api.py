@@ -55,9 +55,15 @@ class TestForecastMetricsApi(unittest.TestCase):
         ensure_postgres_schema(self.pg_dsn)
         with psycopg.connect(self.pg_dsn) as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM forecast_updates")
-                cur.execute("DELETE FROM forecasts")
-            conn.commit()
+                # Only clean test-owned rows; never nuke developer data.
+                cur.execute("DELETE FROM forecast_updates WHERE updated_by = 'test:metrics_api'")
+                cur.execute("DELETE FROM forecasts WHERE created_by = 'test:metrics_api'")
+                conn.commit()
+
+                cur.execute("SELECT COUNT(*) FROM forecasts")
+                remaining = int(cur.fetchone()[0] or 0)
+                if remaining != 0:
+                    self.skipTest("Refusing to DELETE non-test forecasts; database is not empty")
 
         import web_app as web_app_mod
 

@@ -18,10 +18,8 @@ from watchfuleye.v3.forecast.outcome_job import run_forecast_outcome_job
 
 def main() -> int:
     load_dotenv()
-    pg_dsn = os.environ.get(
-        "PG_DSN",
-        "dbname=watchfuleye user=watchful password=watchfulpass host=localhost port=5432",
-    )
+    # Require explicit DSN via env. Do not embed credentials in-repo.
+    pg_dsn = (os.environ.get("PG_DSN") or "").strip()
     limit_raw = os.environ.get("FORECAST_OUTCOME_LIMIT", "50")
     try:
         limit = int(limit_raw)
@@ -30,7 +28,11 @@ def main() -> int:
 
     result = run_forecast_outcome_job(pg_dsn, limit=limit, log=print)
     print(result)
-    # Never fail the process for "skipped" runs; hard failures should be visible in logs.
+    # Exit 0 when explicitly skipped; fail on errors so cron/systemd can alert.
+    if result.get("skipped") is True:
+        return 0
+    if result.get("errors"):
+        return 1
     return 0
 
 
