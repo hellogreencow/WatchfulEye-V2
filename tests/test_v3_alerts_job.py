@@ -62,6 +62,45 @@ class TestV3AlertsJob(unittest.TestCase):
                 cnt = int(cur.fetchone()[0])
                 self.assertGreaterEqual(cnt, 1)
 
+    def test_forecast_outcome_rule_writes_event(self) -> None:
+        assert self.pg_dsn is not None
+        rule_id = "t_alert_job_fc_1"
+
+        with psycopg.connect(self.pg_dsn) as conn:
+            with conn.cursor() as cur:
+                # Ensure we have at least one resolved forecast with recent outcome_measured_at
+                cur.execute(
+                    """
+                    SELECT id FROM forecasts
+                    WHERE outcome_status='resolved'
+                      AND outcome_measured_at IS NOT NULL
+                    ORDER BY outcome_measured_at DESC
+                    LIMIT 1
+                    """
+                )
+                row = cur.fetchone()
+                if not row:
+                    self.skipTest("No resolved forecasts available to test forecast_outcome rule")
+
+                cur.execute(
+                    """
+                    INSERT INTO alert_rules (id, name, enabled, rule_type, config)
+                    VALUES (%s, %s, TRUE, 'forecast_outcome', %s::jsonb)
+                    ON CONFLICT (id) DO UPDATE SET enabled=TRUE, config=excluded.config
+                    """,
+                    (rule_id, "Test forecast outcome", '{"min_confidence": 0.0, "include_statuses": ["resolved"]}'),
+                )
+                conn.commit()
+
+        out = run_alerts_job(self.pg_dsn, limit_rules=10)
+        self.assertEqual(out.get("errors"), [])
+
+        with psycopg.connect(self.pg_dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM alert_events WHERE rule_id=%s;", (rule_id,))
+                cnt = int(cur.fetchone()[0])
+                self.assertGreaterEqual(cnt, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
