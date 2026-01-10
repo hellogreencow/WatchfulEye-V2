@@ -29,3 +29,13 @@ def is_v3_forecast_tracking_enabled() -> bool:
     return _env_truthy(os.environ.get("V3_FORECAST_TRACKING"))
 
 
+def is_v3_connectors_enabled() -> bool:
+    """Gate WS5 connector surfaces."""
+    return _env_truthy(os.environ.get("V3_CONNECTORS"))
+
+
+def is_v3_osint_enabled() -> bool:
+    """Gate WS5 OSINT ingestion surfaces (no scraping; accepts upstream-collected payloads)."""
+    return _env_truthy(os.environ.get("V3_OSINT"))
+
+
