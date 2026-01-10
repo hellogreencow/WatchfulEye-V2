@@ -15,9 +15,6 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from watchfuleye.storage.postgres_schema import ensure_postgres_schema
-
-
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -58,7 +55,6 @@ def run_alerts_job(
     events_written = 0
 
     try:
-        ensure_postgres_schema(pg_dsn)
         with psycopg.connect(pg_dsn, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(

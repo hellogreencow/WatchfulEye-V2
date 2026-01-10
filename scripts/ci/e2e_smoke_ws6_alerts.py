@@ -25,13 +25,61 @@ from watchfuleye.v3.alerts.job import run_alerts_job
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
+_ALERTS_SMOKE_SCHEMA: list[str] = [
+    # term_trends is used by the term_trend rule type.
+    """
+    CREATE TABLE IF NOT EXISTS term_trends (
+      term TEXT NOT NULL,
+      window_start TIMESTAMPTZ NOT NULL,
+      window_end TIMESTAMPTZ NOT NULL,
+      count INTEGER NOT NULL,
+      z_score REAL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (term, window_start, window_end)
+    );
+    """,
+    # WS6 tables (rules + event log).
+    """
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      rule_type TEXT NOT NULL,
+      config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      channels TEXT[] NOT NULL DEFAULT ARRAY['in_app']::text[],
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_evaluated_at TIMESTAMPTZ
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_rule_type ON alert_rules(rule_type);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_updated_at ON alert_rules(updated_at DESC);",
+    """
+    CREATE TABLE IF NOT EXISTS alert_events (
+      id BIGSERIAL PRIMARY KEY,
+      rule_id TEXT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      delivered_at TIMESTAMPTZ,
+      delivery_error TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_alert_events_rule_id_created ON alert_events(rule_id, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_events_created_at ON alert_events(created_at DESC);",
+]
+
+
 def main() -> int:
     pg_dsn = os.environ.get("PG_DSN")
     if not pg_dsn:
         raise RuntimeError("PG_DSN not configured")
 
-    # Schema must be runnable in CI (extensions included).
-    ensure_postgres_schema(pg_dsn)
+    # Keep this smoke deterministic: ensure only the minimal alerts schema needed.
+    # (Full ensure_postgres_schema includes embeddings/vector indexes and can fail for unrelated reasons.)
+    ensure_postgres_schema(pg_dsn, statements=_ALERTS_SMOKE_SCHEMA)
 
     rule_id = "ci_smoke_rule_term_trend"
     term = "ci_smoke_term"
