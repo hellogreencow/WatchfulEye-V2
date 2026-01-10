@@ -223,74 +223,142 @@ def extract_forecasts_from_report(
         >>> forecasts[0]["horizon_days"]
         30
     """
-    forecasts: list[dict[str, Any]] = []
-
-    # Get predictions from report content
     predictions = report_content.get("predictions", [])
     if not predictions:
         return []
 
-    # Get evidence IDs for linking
-    evidence_ids = report_content.get("evidence_ids", [])
-
     now = datetime.now(timezone.utc)
+    forecasts: list[dict[str, Any]] = []
 
-    for pred_text in predictions:
-        if not isinstance(pred_text, str) or not pred_text.strip():
+    # Optional report-level evidence IDs (legacy shape).
+    report_evidence_ids = report_content.get("evidence_ids", [])
+
+    for pred in predictions:
+        claim_text: str | None = None
+        probability: float | None = None
+        horizon_days: int | None = None
+        pred_evidence_ids: list[str] | None = None
+
+        # Support both legacy string predictions and WS4 report_builder dict predictions:
+        #   {"claim": str, "probability": float, "horizon": "7d", "evidence_ids": [...]}
+        if isinstance(pred, dict):
+            raw_claim = pred.get("claim")
+            if isinstance(raw_claim, str) and raw_claim.strip():
+                claim_text = raw_claim.strip()
+
+            # Probability: prefer structured value.
+            raw_p = pred.get("probability")
+            if isinstance(raw_p, (int, float)):
+                p = float(raw_p)
+                if p > 1.0:
+                    p = p / 100.0
+                if 0.0 <= p <= 1.0:
+                    probability = p
+            elif isinstance(raw_p, str) and raw_p.strip():
+                try:
+                    p = float(raw_p.strip())
+                    if p > 1.0:
+                        p = p / 100.0
+                    if 0.0 <= p <= 1.0:
+                        probability = p
+                except Exception:
+                    probability = None
+
+            # Horizon: prefer structured value.
+            raw_h = pred.get("horizon_days")
+            if isinstance(raw_h, int):
+                horizon_days = raw_h
+            else:
+                raw_h2 = pred.get("horizon")
+                horizon_days = _parse_horizon_to_days(raw_h2)
+
+            raw_eids = pred.get("evidence_ids")
+            if isinstance(raw_eids, list) and raw_eids:
+                pred_evidence_ids = [str(x) for x in raw_eids if x is not None]
+
+        elif isinstance(pred, str) and pred.strip():
+            claim_text = pred.strip()
+            probability = _extract_probability(claim_text)
+            horizon_days = _extract_horizon(claim_text)
+
+        if not claim_text:
             continue
 
-        # Extract probability
-        probability = _extract_probability(pred_text)
+        # If probability wasn't provided in structured fields, try extracting from text.
         if probability is None:
-            # Skip predictions without clear probability
+            probability = _extract_probability(claim_text)
+        if probability is None:
             continue
 
-        # Extract time horizon
-        horizon_days = _extract_horizon(pred_text)
         if horizon_days is None:
-            # Skip predictions without clear horizon
+            horizon_days = _extract_horizon(claim_text)
+        if horizon_days is None:
             continue
 
-        # Normalize claim text
-        claim = _normalize_claim(pred_text)
-        if not claim:
-            claim = pred_text  # Fall back to original if normalization fails
+        # Keep claim text as-is for structured inputs; normalize legacy string inputs.
+        claim = claim_text if isinstance(pred, dict) else _normalize_claim(claim_text) or claim_text
 
-        # Extract entity references
-        entity_ids, entity_types = _extract_entity_references(pred_text, report_content)
+        entity_ids, entity_types = _extract_entity_references(claim_text, report_content)
 
-        # Generate forecast ID
+        evidence_ids = pred_evidence_ids if pred_evidence_ids is not None else report_evidence_ids
+
         forecast_id = f"fc_{uuid.uuid4().hex[:12]}"
-
-        # Calculate horizon date
         horizon_date = now + timedelta(days=horizon_days)
 
-        # Build forecast dict
-        forecast = {
-            "id": forecast_id,
-            "report_id": report_id,
-            "investigation_id": investigation_id,
-            "claim": claim,
-            "probability": probability,
-            "horizon_days": horizon_days,
-            "horizon_date": horizon_date,
-            "entity_ids": entity_ids if entity_ids else None,
-            "entity_types": entity_types if entity_types else None,
-            "evidence_ids": evidence_ids if evidence_ids else None,
-            "assumptions": None,  # TODO: Extract assumptions in future
-            "tags": None,  # TODO: Auto-tag by domain
-            "created_by": "extractor:v1",
-            "outcome_status": "pending",
-            "outcome_result": None,
-            "outcome_confidence": None,
-            "outcome_measured_at": None,
-            "outcome_method": None,
-            "outcome_evidence": None,
-            "brier_score": None,
-            "log_score": None,
-            "calibration_bin": None,
-        }
-
-        forecasts.append(forecast)
+        forecasts.append(
+            {
+                "id": forecast_id,
+                "report_id": report_id,
+                "investigation_id": investigation_id,
+                "claim": claim,
+                "probability": probability,
+                "horizon_days": horizon_days,
+                "horizon_date": horizon_date,
+                "entity_ids": entity_ids if entity_ids else None,
+                "entity_types": entity_types if entity_types else None,
+                "evidence_ids": [str(x) for x in evidence_ids] if evidence_ids else None,
+                "assumptions": None,  # TODO: Extract assumptions in future
+                "tags": None,  # TODO: Auto-tag by domain
+                "created_by": "extractor:v2",
+                "outcome_status": "pending",
+                "outcome_result": None,
+                "outcome_confidence": None,
+                "outcome_measured_at": None,
+                "outcome_method": None,
+                "outcome_evidence": None,
+                "brier_score": None,
+                "log_score": None,
+                "calibration_bin": None,
+            }
+        )
 
     return forecasts
+
+
+def _parse_horizon_to_days(raw: Any) -> int | None:
+    """Parse horizon strings like '7d', '2w', '3m' into days.
+
+    Falls back to None when the input isn't parseable.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip().lower()
+    if not s:
+        return None
+    # Common V3 report_builder format: "7d", "14d", "30d", "90d"
+    m = re.fullmatch(r"(\d+)\s*([dwm])", s)
+    if not m:
+        return None
+    n = int(m.group(1))
+    unit = m.group(2)
+    if unit == "d":
+        return n
+    if unit == "w":
+        return n * 7
+    if unit == "m":
+        return n * 30
+    return None
