@@ -14,4 +14,15 @@ export type ListAlertEventsResponse =
   | { success: true; data: AlertEventRow[]; count: number }
   | { success: false; error: string };
 
+export type AlertsInboxResponse =
+  | {
+      success: true;
+      data: AlertEventRow[];
+      count: number;
+      unread_count: number;
+      last_seen_event_id: number;
+      newest_event_id: number;
+    }
+  | { success: false; error: string };
+
 

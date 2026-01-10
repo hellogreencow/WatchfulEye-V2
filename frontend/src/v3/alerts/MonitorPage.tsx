@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
-import { fetchAlertEvents } from './api';
+import { fetchAlertsInbox, markAlertsSeen } from './api';
 import type { AlertEventRow } from './types';
 
 function isLocalhost(): boolean {
@@ -36,6 +36,9 @@ export function MonitorPage(): React.ReactElement {
   const [events, setEvents] = useState<AlertEventRow[]>([]);
   const [limit, setLimit] = useState(100);
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [lastSeenId, setLastSeenId] = useState(0);
+  const [newestId, setNewestId] = useState(0);
 
   const sorted = useMemo(() => {
     // API already returns newest first; keep stable.
@@ -47,14 +50,18 @@ export function MonitorPage(): React.ReactElement {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchAlertEvents(limit);
+      const res = await fetchAlertsInbox(limit);
       if (!res || res.success !== true) {
         const msg = (res as any)?.error || 'Failed to load alert events';
         setError(String(msg));
         setEvents([]);
+        setUnreadCount(0);
         return;
       }
       setEvents(res.data || []);
+      setUnreadCount(Number((res as any).unread_count || 0));
+      setLastSeenId(Number((res as any).last_seen_event_id || 0));
+      setNewestId(Number((res as any).newest_event_id || 0));
     } catch (e: any) {
       const status = e?.response?.status;
       if (status === 404) setError('Alerts are disabled on the server (V3_ALERTS).');
@@ -62,6 +69,7 @@ export function MonitorPage(): React.ReactElement {
       else if (status === 403) setError('Admin access required.');
       else setError(e?.message ? String(e.message) : 'Request failed');
       setEvents([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
@@ -96,10 +104,32 @@ export function MonitorPage(): React.ReactElement {
         <div>
           <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Monitor</h1>
           <div className="text-sm text-slate-600 dark:text-slate-300">
-            Recent alert events (system log)
+            Recent alert events (in-app inbox)
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Badge variant={unreadCount > 0 ? 'default' : 'secondary'}>Unread: {unreadCount}</Badge>
+          <Button
+            onClick={async () => {
+              try {
+                const target = newestId || lastSeenId;
+                if (!target) return;
+                const res = await markAlertsSeen(target);
+                if ((res as any)?.success === true) {
+                  setLastSeenId(Number((res as any).last_seen_event_id || target));
+                  await refresh();
+                } else {
+                  setError(String((res as any)?.error || 'Failed to mark seen'));
+                }
+              } catch (e: any) {
+                setError(e?.message ? String(e.message) : 'Failed to mark seen');
+              }
+            }}
+            disabled={loading || newestId <= 0 || newestId <= lastSeenId}
+            variant="outline"
+          >
+            Mark seen
+          </Button>
           <select
             className="h-9 rounded-md border bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
             value={limit}
