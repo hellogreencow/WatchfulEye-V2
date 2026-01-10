@@ -39,3 +39,8 @@ def is_v3_osint_enabled() -> bool:
     return _env_truthy(os.environ.get("V3_OSINT"))
 
 
+def is_v3_alerts_enabled() -> bool:
+    """Gate WS6 alerts/monitoring surfaces."""
+    return _env_truthy(os.environ.get("V3_ALERTS"))
+
+
