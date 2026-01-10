@@ -50,7 +50,6 @@ class TestRecommendationPerfJob(unittest.TestCase):
 
         ensure_postgres_schema(self.pg_dsn)
 
-        now = datetime.now(timezone.utc)
         entry_dt = datetime(2026, 1, 1, tzinfo=timezone.utc)
         analysis_id = None
         rec_id = None
@@ -133,6 +132,22 @@ class TestRecommendationPerfJob(unittest.TestCase):
                 n = int(cur.fetchone()[0] or 0)
                 # Should write at least one horizon row.
                 self.assertGreaterEqual(n, 1, f"expected perf rows, got n={n}, result={result}, prices_n={prices_n}")
+
+                # Deterministic fixture: 100 -> 110 for both AAPL and SPY on 7d => alpha ~= 0.0
+                cur.execute(
+                    """
+                    SELECT rec_return, benchmark_return, alpha
+                    FROM recommendation_performance
+                    WHERE recommendation_id=%s AND benchmark_symbol='SPY' AND horizon_days=7
+                    """,
+                    (rec_id,),
+                )
+                row = cur.fetchone()
+                self.assertIsNotNone(row, "missing 7d performance row")
+                rec_return, bench_return, alpha = row
+                self.assertAlmostEqual(float(rec_return), 0.10, places=8)
+                self.assertAlmostEqual(float(bench_return), 0.10, places=8)
+                self.assertAlmostEqual(float(alpha), 0.0, places=8)
 
 
 if __name__ == "__main__":

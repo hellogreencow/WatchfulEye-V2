@@ -46,36 +46,36 @@ def run_recommendation_performance_job(
 
     try:
         ensure_postgres_schema(pg_dsn)
+        bars_cache: dict[str, Any] = {}
         with psycopg.connect(pg_dsn, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-                # Pick recent recommendations that have not been computed for at least one horizon.
+                # Pick recent recommendations that are missing at least one horizon for this benchmark.
                 cur.execute(
                     """
                     SELECT r.id, r.created_at, r.action, r.ticker
                     FROM recommendations r
-                    WHERE NOT EXISTS (
-                      SELECT 1
-                      FROM recommendation_performance p
-                      WHERE p.recommendation_id = r.id
-                        AND p.benchmark_symbol = %s
-                        AND p.horizon_days = ANY(%s)
-                    )
+                    LEFT JOIN recommendation_performance p
+                      ON p.recommendation_id = r.id
+                     AND p.benchmark_symbol = %s
+                     AND p.horizon_days = ANY(%s)
+                    GROUP BY r.id, r.created_at, r.action, r.ticker
+                    HAVING COUNT(DISTINCT p.horizon_days) < %s
                     ORDER BY r.created_at DESC
                     LIMIT %s
                     """,
-                    (cfg.benchmark_ticker, list(cfg.horizons_days), int(limit)),
+                    (cfg.benchmark_ticker, list(cfg.horizons_days), len(cfg.horizons_days), int(limit)),
                 )
                 recs = cur.fetchall()
 
             for r in recs:
                 try:
-                    processed_recs += 1
                     rec_id = int(r["id"])
                     created_at = r["created_at"]
-                    action = str(r["action"] or "")
+                    action = str(r["action"] or "").strip().upper()
                     ticker = str(r["ticker"] or "").strip().upper()
                     if not ticker:
                         continue
+                    processed_recs += 1
 
                     entry_dt = _as_utc_datetime(created_at) or datetime.now(timezone.utc)
                     entry_day = entry_dt.date()
@@ -87,6 +87,7 @@ def run_recommendation_performance_job(
                         benchmark=cfg.benchmark_ticker,
                         entry_day=entry_day,
                         horizons=cfg.horizons_days,
+                        bars_cache=bars_cache,
                     )
 
                     for h in cfg.horizons_days:
@@ -132,6 +133,7 @@ def _ensure_prices_daily(
     benchmark: str,
     entry_day: date,
     horizons: Iterable[int],
+    bars_cache: dict[str, Any] | None = None,
 ) -> int:
     """Fetch and upsert daily closes for ticker and benchmark for needed window."""
     max_h = max(int(h) for h in horizons) if horizons else 0
@@ -144,7 +146,12 @@ def _ensure_prices_daily(
         sym = normalize_symbol(t)
         if not sym:
             continue
-        bars = fetch_stooq_daily(sym)
+        if bars_cache is not None and sym in bars_cache:
+            bars = bars_cache[sym]
+        else:
+            bars = fetch_stooq_daily(sym)
+            if bars_cache is not None:
+                bars_cache[sym] = bars
         if not bars:
             continue
         with conn.cursor() as cur:

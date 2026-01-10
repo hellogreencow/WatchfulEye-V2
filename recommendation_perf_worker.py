@@ -19,7 +19,17 @@ def main() -> int:
         print("[recommendation_perf_worker] missing PG_DSN", file=sys.stderr)
         return 1
 
-    result = run_recommendation_performance_job(pg_dsn, limit=int(os.environ.get("PERF_LIMIT", "100")))
+    limit_raw = os.environ.get("PERF_LIMIT", "100")
+    try:
+        limit = int(limit_raw)
+    except ValueError:
+        print(f"[recommendation_perf_worker] invalid PERF_LIMIT={limit_raw!r}", file=sys.stderr)
+        return 1
+    if limit <= 0:
+        print(f"[recommendation_perf_worker] PERF_LIMIT must be > 0 (got {limit})", file=sys.stderr)
+        return 1
+
+    result = run_recommendation_performance_job(pg_dsn, limit=limit)
     errors = result.get("errors") or []
 
     print(
