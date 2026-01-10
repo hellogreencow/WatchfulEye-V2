@@ -127,7 +127,7 @@ def run_recommendation_performance_job(
 
 
 def _ensure_prices_daily(
-    conn: psycopg.Connection,
+    conn: psycopg.Connection[Any],
     *,
     ticker: str,
     benchmark: str,
@@ -173,7 +173,7 @@ def _ensure_prices_daily(
 
 
 def _compute_one(
-    conn: psycopg.Connection,
+    conn: psycopg.Connection[Any],
     *,
     recommendation_id: int,
     action: str,

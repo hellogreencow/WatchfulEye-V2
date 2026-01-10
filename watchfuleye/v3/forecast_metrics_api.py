@@ -434,7 +434,10 @@ def _serialize_recent_forecast(f: dict[str, Any]) -> dict[str, Any]:
     log_score = f.get("log_score")
     try:
         if brier is None and f.get("outcome_status") == "resolved" and f.get("outcome_result") is not None:
-            prob = float(f.get("probability"))
+            prob_raw = f.get("probability")
+            if prob_raw is None:
+                raise ValueError("probability missing")
+            prob = float(prob_raw)
             actual = 1.0 if bool(f.get("outcome_result")) else 0.0
             brier = (prob - actual) ** 2
             if bool(f.get("outcome_result")):
