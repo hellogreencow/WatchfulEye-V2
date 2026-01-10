@@ -143,7 +143,8 @@ def _backfill_forecasts_from_v3_reports(conn: psycopg.Connection, *, max_reports
                         f.get("tags") or ["seed", "seed:backfill_v3_reports"],
                     ),
                 )
-                inserted += 1
+                if cur.rowcount == 1:
+                    inserted += 1
     return inserted, backfilled_reports
 
 
@@ -151,7 +152,7 @@ def _seed_from_global_brief_recommendations(
     conn: psycopg.Connection,
     *,
     max_analyses: int,
-    horizon_days: int,
+    horizons_days: list[int],
     dry_run: bool,
 ) -> SeedResult:
     created_invs = 0
@@ -212,21 +213,13 @@ def _seed_from_global_brief_recommendations(
                 )
                 if cur.rowcount == 1:
                     created_reports += 1
-            else:
-                # dry-run: assume these would be created (counts approximate)
-                created_invs += 1
-                created_reports += 1
 
             # Convert recommendation → forecast claim (market accountability hooks).
             direction = _action_to_direction(str(action))
             p = _action_to_probability(str(action))
-            claim = f"{ticker} {direction} SPY over {horizon_days} days"
-
-            fc_id = _deterministic_seed_forecast_id(recommendation_id=int(rec_id), horizon_days=horizon_days)
             created_at = rec_created_at.astimezone(timezone.utc) if isinstance(rec_created_at, datetime) else _utcnow()
-            horizon_date = created_at + timedelta(days=horizon_days)
 
-            tags = [
+            base_tags = [
                 "seed",
                 "seed:global_brief_recommendations",
                 "domain:markets",
@@ -234,48 +227,60 @@ def _seed_from_global_brief_recommendations(
                 f"action:{str(action).strip().lower()}",
             ]
 
-            if dry_run:
-                inserted_forecasts += 1
-                continue
+            for horizon_days in horizons_days:
+                if horizon_days <= 0:
+                    continue
 
-            cur.execute(
-                """
-                INSERT INTO forecasts (
-                  id, report_id, investigation_id,
-                  claim, probability, horizon_days, horizon_date,
-                  evidence_ids, assumptions,
-                  created_at, updated_at,
-                  created_by, tags,
-                  outcome_status
+                claim = f"{ticker} {direction} SPY over {horizon_days} days"
+                fc_id = _deterministic_seed_forecast_id(
+                    recommendation_id=int(rec_id), horizon_days=int(horizon_days)
                 )
-                VALUES (
-                  %s, %s, %s,
-                  %s, %s, %s, %s,
-                  %s, %s,
-                  %s, %s,
-                  %s, %s,
-                  %s
+                horizon_date = created_at + timedelta(days=int(horizon_days))
+                tags = base_tags + [f"horizon:{int(horizon_days)}d"]
+
+                if dry_run:
+                    inserted_forecasts += 1
+                    continue
+
+                cur.execute(
+                    """
+                    INSERT INTO forecasts (
+                      id, report_id, investigation_id,
+                      claim, probability, horizon_days, horizon_date,
+                      evidence_ids, assumptions,
+                      created_at, updated_at,
+                      created_by, tags,
+                      outcome_status
+                    )
+                    VALUES (
+                      %s, %s, %s,
+                      %s, %s, %s, %s,
+                      %s, %s,
+                      %s, %s,
+                      %s, %s,
+                      %s
+                    )
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (
+                        fc_id,
+                        report_id,
+                        inv_id,
+                        claim,
+                        p,
+                        int(horizon_days),
+                        horizon_date,
+                        None,
+                        [f"Seeded from Global Brief recommendation {ticker} {action}: {rationale}"],
+                        created_at,
+                        created_at,
+                        "seed:global_brief_recommendations",
+                        tags,
+                        "pending",
+                    ),
                 )
-                ON CONFLICT (id) DO NOTHING
-                """,
-                (
-                    fc_id,
-                    report_id,
-                    inv_id,
-                    claim,
-                    p,
-                    horizon_days,
-                    horizon_date,
-                    None,
-                    [f"Seeded from Global Brief recommendation {ticker} {action}: {rationale}"],
-                    created_at,
-                    created_at,
-                    "seed:global_brief_recommendations",
-                    tags,
-                    "pending",
-                ),
-            )
-            inserted_forecasts += 1
+                if cur.rowcount == 1:
+                    inserted_forecasts += 1
 
     return SeedResult(
         created_investigations=created_invs,
@@ -290,10 +295,21 @@ def run_seed(
     pg_dsn: str,
     max_v3_reports: int,
     max_analyses: int,
-    horizon_days: int,
+    horizons_days: list[int],
     dry_run: bool,
 ) -> SeedResult:
-    ensure_postgres_schema(pg_dsn)
+    try:
+        ensure_postgres_schema(pg_dsn)
+    except Exception as e:
+        msg = str(e)
+        # Common first-run failure on a fresh Postgres without pg_trgm installed.
+        if "gin_trgm_ops" in msg or "pg_trgm" in msg:
+            raise RuntimeError(
+                "Postgres extension pg_trgm appears to be missing. "
+                "Fix by running: CREATE EXTENSION IF NOT EXISTS pg_trgm; "
+                "Then re-run this seed script."
+            ) from e
+        raise
 
     inserted_backfill = 0
     backfilled_reports = 0
@@ -313,7 +329,7 @@ def run_seed(
             seed_res = _seed_from_global_brief_recommendations(
                 conn,
                 max_analyses=max_analyses,
-                horizon_days=horizon_days,
+                horizons_days=horizons_days,
                 dry_run=dry_run,
             )
             created_invs += seed_res.created_investigations
@@ -333,18 +349,30 @@ def main() -> int:
     p.add_argument("--pg-dsn", default=os.environ.get("PG_DSN"))
     p.add_argument("--max-v3-reports", type=int, default=50)
     p.add_argument("--max-analyses", type=int, default=50)
-    p.add_argument("--horizon-days", type=int, default=30)
+    p.add_argument(
+        "--horizons-days",
+        type=str,
+        default="7,30,90",
+        help="Comma-separated horizon days to seed for Global Brief recommendations (default: 7,30,90).",
+    )
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
 
     if not args.pg_dsn:
         raise SystemExit("PG_DSN is required (arg --pg-dsn or env PG_DSN).")
 
+    horizons_days: list[int] = []
+    for tok in str(args.horizons_days).split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        horizons_days.append(int(tok))
+
     res = run_seed(
         pg_dsn=str(args.pg_dsn),
         max_v3_reports=int(args.max_v3_reports),
         max_analyses=int(args.max_analyses),
-        horizon_days=int(args.horizon_days),
+        horizons_days=horizons_days,
         dry_run=bool(args.dry_run),
     )
     print(
@@ -354,6 +382,7 @@ def main() -> int:
             "backfilled_reports": res.backfilled_reports,
             "inserted_forecasts": res.inserted_forecasts,
             "dry_run": bool(args.dry_run),
+            "horizons_days": horizons_days,
         }
     )
     return 0
