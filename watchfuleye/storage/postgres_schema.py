@@ -208,6 +208,28 @@ SCHEMA_STATEMENTS: list[str] = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_entities_type_label ON entities (entity_type, label);",
 
+    # =====================
+    # WS5 (V3): OSINT ingestion store (no scraping; accepts upstream payloads)
+    # =====================
+    """
+    CREATE TABLE IF NOT EXISTS osint_posts (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL, -- e.g. 'x'
+      handle TEXT NOT NULL,   -- e.g. 'osintdefender'
+      post_id TEXT NOT NULL,  -- platform-native id
+      url TEXT,
+      content_text TEXT,
+      posted_at TIMESTAMPTZ,
+      raw JSONB,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      promoted_article_id BIGINT, -- optional link to articles.id after promotion
+      promoted_at TIMESTAMPTZ,
+      UNIQUE (platform, handle, post_id)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_osint_posts_posted_at ON osint_posts (posted_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_osint_posts_handle_posted ON osint_posts (handle, posted_at DESC);",
+
     """
     CREATE TABLE IF NOT EXISTS entity_identifiers (
       id BIGSERIAL PRIMARY KEY,
