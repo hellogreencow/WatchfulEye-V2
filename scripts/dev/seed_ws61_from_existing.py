@@ -77,6 +77,24 @@ def _action_to_direction(action: str) -> str:
     return "outperforms"
 
 
+def _parse_horizons_days(raw: str) -> list[int]:
+    """Parse comma-separated horizons into positive integers, preserving order and de-duping."""
+    out: list[int] = []
+    seen: set[int] = set()
+    for tok in (raw or "").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        n = int(tok)
+        if n <= 0:
+            continue
+        if n in seen:
+            continue
+        seen.add(n)
+        out.append(n)
+    return out
+
+
 def _yield_backfill_candidates(cur: psycopg.Cursor, *, max_reports: int) -> Iterable[tuple[str, str, dict[str, Any]]]:
     cur.execute(
         """
@@ -361,12 +379,7 @@ def main() -> int:
     if not args.pg_dsn:
         raise SystemExit("PG_DSN is required (arg --pg-dsn or env PG_DSN).")
 
-    horizons_days: list[int] = []
-    for tok in str(args.horizons_days).split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        horizons_days.append(int(tok))
+    horizons_days = _parse_horizons_days(str(args.horizons_days))
 
     res = run_seed(
         pg_dsn=str(args.pg_dsn),
