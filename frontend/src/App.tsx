@@ -15,7 +15,10 @@ function App() {
   // IMPORTANT: The app must remain functional even if a build is accidentally produced with
   // REACT_APP_FIGMA_MODE enabled. Figma preview must never take over the homepage.
   const isFigmaMode = process.env.REACT_APP_FIGMA_MODE === 'true';
-  const isV3ExamineUI = process.env.REACT_APP_V3_EXAMINE_UI === 'true';
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const isV3ExamineUI = isLocalhost || process.env.REACT_APP_V3_EXAMINE_UI === 'true';
   // Don't check auth_token here - let Dashboard handle its own auth
   // This ensures landing page always shows for unauthenticated users
   const hasAuthToken = !!localStorage.getItem('auth_token');
