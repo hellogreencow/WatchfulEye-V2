@@ -11,6 +11,7 @@ import { ManifestoSection } from './components/landing/ManifestoSection';
 import { AuthProvider } from './Dashboard';
 import { V3ExaminePage } from './v3/examine/ExaminePage';
 import { MonitorPage } from './v3/alerts/MonitorPage';
+import { CommandCenterPage } from './v3/command/CommandCenterPage';
 
 function App() {
   // IMPORTANT: The app must remain functional even if a build is accidentally produced with
@@ -21,6 +22,7 @@ function App() {
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const isV3ExamineUI = isLocalhost || process.env.REACT_APP_V3_EXAMINE_UI === 'true';
   const isV3AlertsUI = isLocalhost || process.env.REACT_APP_V3_ALERTS === 'true';
+  const isV3CommandCenterUI = isLocalhost || process.env.REACT_APP_V3_COMMAND_CENTER === 'true';
   // Don't check auth_token here - let Dashboard handle its own auth
   // This ensures landing page always shows for unauthenticated users
   const hasAuthToken = !!localStorage.getItem('auth_token');
@@ -52,6 +54,14 @@ function App() {
             />
           )}
           
+          {/* V3 Command Center (if enabled) */}
+          {isV3CommandCenterUI && (
+            <Route
+              path="/v3/command"
+              element={hasAuthToken ? <CommandCenterPage /> : <Navigate to="/login" replace />}
+            />
+          )}
+
           {/* V3 Examine (if enabled) */}
           {isV3ExamineUI && <Route path="/v3/examine" element={<V3ExaminePage />} />}
 
