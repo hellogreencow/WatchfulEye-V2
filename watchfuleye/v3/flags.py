@@ -6,6 +6,7 @@ V3 work is shipped behind flags by default to avoid breaking existing production
 from __future__ import annotations
 
 import os
+import sys
 
 
 def _env_truthy(val: str | None) -> bool:
@@ -14,33 +15,42 @@ def _env_truthy(val: str | None) -> bool:
     return val.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _is_local_dev() -> bool:
+    """Force-enable V3 flags on laptop localhost development.
+
+    This is intentionally scoped to macOS so we don't accidentally enable V3 on
+    staging/prod (Linux).
+    """
+    return sys.platform == "darwin"
+
+
 def is_v3_entity_ids_enabled() -> bool:
     """Gate V3 entity resolution surfaces."""
-    return _env_truthy(os.environ.get("V3_ENTITY_IDS"))
+    return _is_local_dev() or _env_truthy(os.environ.get("V3_ENTITY_IDS"))
 
 
 def is_v3_examine_mvp_enabled() -> bool:
     """Gate the minimal 'Examine X' MVP surface (WS4.0 contract stub lives in WS0)."""
-    return _env_truthy(os.environ.get("V3_EXAMINE_MVP"))
+    return _is_local_dev() or _env_truthy(os.environ.get("V3_EXAMINE_MVP"))
 
 
 def is_v3_forecast_tracking_enabled() -> bool:
     """Gate WS6.1 forecast accountability features (accuracy engine)."""
-    return _env_truthy(os.environ.get("V3_FORECAST_TRACKING"))
+    return _is_local_dev() or _env_truthy(os.environ.get("V3_FORECAST_TRACKING"))
 
 
 def is_v3_connectors_enabled() -> bool:
     """Gate WS5 connector surfaces."""
-    return _env_truthy(os.environ.get("V3_CONNECTORS"))
+    return _is_local_dev() or _env_truthy(os.environ.get("V3_CONNECTORS"))
 
 
 def is_v3_osint_enabled() -> bool:
     """Gate WS5 OSINT ingestion surfaces (no scraping; accepts upstream-collected payloads)."""
-    return _env_truthy(os.environ.get("V3_OSINT"))
+    return _is_local_dev() or _env_truthy(os.environ.get("V3_OSINT"))
 
 
 def is_v3_alerts_enabled() -> bool:
     """Gate WS6 alerts/monitoring surfaces."""
-    return _env_truthy(os.environ.get("V3_ALERTS"))
+    return _is_local_dev() or _env_truthy(os.environ.get("V3_ALERTS"))
 
 

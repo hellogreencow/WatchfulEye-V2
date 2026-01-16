@@ -3872,7 +3872,11 @@ function AnalyticsModal({ isOpen, onClose, stats, sentimentDist, marketIntel }: 
             </div>
 
             {/* WS6.1: Forecast Accountability Panel */}
-            {process.env.REACT_APP_V3_FORECAST_TRACKING === 'true' && (
+            {((typeof window !== 'undefined' &&
+              (window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1' ||
+                window.location.hostname === '::1')) ||
+              (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true') && (
               <div className="mb-8">
                 <AccuracyPanel />
               </div>
@@ -4694,6 +4698,13 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '::1');
+  const isV3ForecastTrackingEnabled =
+    isLocalhost || (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true';
 
   useEffect(() => {
     const fetchAdminStats = async () => {
@@ -4762,7 +4773,7 @@ function AdminDashboard() {
         >
           User Management
         </button>
-        {process.env.REACT_APP_V3_FORECAST_TRACKING === 'true' && (
+        {isV3ForecastTrackingEnabled && (
           <button
             className={`py-2 px-4 text-sm font-medium ${
               activeTab === 'integrations' 
@@ -4929,7 +4940,7 @@ function AdminDashboard() {
       )}
 
       {/* Integrations (WS6.1) */}
-      {process.env.REACT_APP_V3_FORECAST_TRACKING === 'true' && activeTab === 'integrations' && (
+      {isV3ForecastTrackingEnabled && activeTab === 'integrations' && (
         <ApiKeysPanel apiBaseUrl={API_BASE_URL} />
       )}
     </div>
