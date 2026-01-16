@@ -1,9 +1,9 @@
-"""CI smoke: alerts schema + minimal trigger path.
+"""CI E2E smoke: WS6 alerts evaluator writes an event.
 
 This intentionally avoids running the Flask server. It validates:
 - Postgres is reachable via PG_DSN
 - ensure_postgres_schema() runs cleanly (extensions + tables + indexes)
-- alert_rules + term_trends can drive writing alert_events (minimal inline evaluator)
+- WS6 evaluator (run_alerts_job) can read an enabled rule and write alert_events
 
 This is a hard gate intended to prevent "green unit tests" while the actual
 retention engine path is broken.
@@ -28,65 +28,57 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from watchfuleye.storage.postgres_schema import ensure_postgres_schema
+from watchfuleye.v3.alerts.job import run_alerts_job
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
-def _eval_term_trend_inline(conn: psycopg.Connection[dict[str, object]], *, rule_id: str) -> int:
-    """Minimal inline evaluator for term_trend rules.
-
-    We intentionally keep this tiny and deterministic to avoid flake in CI.
-    WS6's real evaluator is tested in PR #36; this job is a schema + I/O tripwire.
+_ALERTS_SMOKE_SCHEMA: list[str] = [
+    # term_trends is used by the term_trend rule type.
     """
-    with conn.cursor() as cur:
-        cur.execute("SELECT config FROM alert_rules WHERE id=%s AND enabled=TRUE", (rule_id,))
-        row = cur.fetchone()
-        if not row:
-            return 0
-        config = row.get("config") or {}
-        threshold = float(config.get("threshold", 3.0))
-        min_count = int(config.get("min_count", 1))
-
-        cur.execute(
-            """
-            SELECT term, window_start, window_end, count, z_score
-            FROM term_trends
-            WHERE z_score IS NOT NULL
-              AND z_score >= %s
-              AND count >= %s
-            ORDER BY z_score DESC
-            LIMIT 5
-            """,
-            (threshold, min_count),
-        )
-        trends = cur.fetchall()
-
-    if not trends:
-        return 0
-
-    now = _utcnow()
-    written = 0
-    for t in trends:
-        payload = {
-            "rule_type": "term_trend",
-            "term": t.get("term"),
-            "window_start": t.get("window_start").isoformat() if t.get("window_start") else None,
-            "window_end": t.get("window_end").isoformat() if t.get("window_end") else None,
-            "count": t.get("count"),
-            "z_score": t.get("z_score"),
-            "source": "ci_smoke_inline_eval",
-        }
-        with conn.cursor() as cur2:
-            cur2.execute(
-                """
-                INSERT INTO alert_events (rule_id, event_type, payload, created_at)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (rule_id, "fired", Jsonb(payload), now),
-            )
-        written += 1
-    return written
+    CREATE TABLE IF NOT EXISTS term_trends (
+      term TEXT NOT NULL,
+      window_start TIMESTAMPTZ NOT NULL,
+      window_end TIMESTAMPTZ NOT NULL,
+      count INTEGER NOT NULL,
+      z_score REAL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (term, window_start, window_end)
+    );
+    """,
+    # WS6 tables (rules + event log).
+    """
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      rule_type TEXT NOT NULL,
+      config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      channels TEXT[] NOT NULL DEFAULT ARRAY['in_app']::text[],
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_evaluated_at TIMESTAMPTZ
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_rule_type ON alert_rules(rule_type);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rules_updated_at ON alert_rules(updated_at DESC);",
+    """
+    CREATE TABLE IF NOT EXISTS alert_events (
+      id BIGSERIAL PRIMARY KEY,
+      rule_id TEXT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      delivered_at TIMESTAMPTZ,
+      delivery_error TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_alert_events_rule_id_created ON alert_events(rule_id, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_alert_events_created_at ON alert_events(created_at DESC);",
+]
 
 
 def main() -> int:
@@ -94,8 +86,9 @@ def main() -> int:
     if not pg_dsn:
         raise RuntimeError("PG_DSN not configured")
 
-    # Schema must be runnable in CI (extensions included).
-    ensure_postgres_schema(pg_dsn)
+    # Keep this smoke deterministic: ensure only the minimal alerts schema needed.
+    # (Full ensure_postgres_schema includes embeddings/vector indexes and can fail for unrelated reasons.)
+    ensure_postgres_schema(pg_dsn, statements=_ALERTS_SMOKE_SCHEMA)
 
     rule_id = "ci_smoke_rule_term_trend"
     term = "ci_smoke_term"
@@ -147,9 +140,9 @@ def main() -> int:
             cur.execute("DELETE FROM alert_events WHERE rule_id=%s", (rule_id,))
         conn.commit()
 
-    with psycopg.connect(pg_dsn, row_factory=dict_row) as conn3:
-        wrote = _eval_term_trend_inline(conn3, rule_id=rule_id)
-        conn3.commit()
+    result = run_alerts_job(pg_dsn, limit_rules=5)
+    if result.get("errors"):
+        raise RuntimeError(f"alerts job errors: {result['errors']}")
 
     with psycopg.connect(pg_dsn, row_factory=dict_row) as conn2:
         with conn2.cursor() as cur2:
@@ -161,8 +154,8 @@ def main() -> int:
         raise RuntimeError("expected >= 1 alert_event from term_trend rule, got 0")
 
     print(
-        "OK: alerts schema smoke passed",
-        {"events_written": n, "events_written_by_inline_eval": wrote},
+        "OK: ws6 alerts smoke passed",
+        {"events_written": n, "rules_evaluated": result.get("rules_evaluated")},
     )
     return 0
 
