@@ -62,7 +62,8 @@ class PostgresArticleStore:
 
         sql = f"""
         SELECT id, title, description, canonical_url, source_name, source_domain, published_at, created_at,
-               excerpt, trust_score, quality_score, bucket
+               excerpt, trust_score, quality_score, bucket,
+               sentiment_score, sentiment_confidence, sentiment_analysis_text
         FROM articles
         WHERE {' AND '.join(where)}
         ORDER BY created_at DESC
@@ -100,6 +101,7 @@ class PostgresArticleStore:
         sql = f"""
         SELECT id, title, description, canonical_url, source_name, source_domain, published_at, created_at,
                excerpt, trust_score, quality_score, bucket,
+               sentiment_score, sentiment_confidence, sentiment_analysis_text,
                ts_rank_cd(search_tsv, websearch_to_tsquery('english', %s)) AS rank
         FROM articles
         WHERE {' AND '.join(where)}
@@ -119,7 +121,11 @@ class PostgresArticleStore:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT bucket, COUNT(*) AS count, AVG(quality_score) AS avg_quality
+                    SELECT
+                      bucket,
+                      COUNT(*) AS count,
+                      AVG(sentiment_score) AS avg_sentiment,
+                      AVG(sentiment_confidence) AS avg_confidence
                     FROM articles
                     GROUP BY bucket
                     ORDER BY count DESC
@@ -127,15 +133,14 @@ class PostgresArticleStore:
                 )
                 rows = cur.fetchall()
         out = []
-        for bucket, count, avg_quality in rows:
+        for bucket, count, avg_sentiment, avg_confidence in rows:
             out.append(
                 {
                     "name": bucket,
                     "display_name": str(bucket).title(),
                     "count": int(count or 0),
-                    # Frontend expects avg_sentiment/avg_confidence sometimes; map quality
-                    "avg_sentiment": float(avg_quality or 0.0),
-                    "avg_confidence": float(avg_quality or 0.0),
+                    "avg_sentiment": float(avg_sentiment or 0.0),
+                    "avg_confidence": float(avg_confidence or 0.0),
                 }
             )
         return out
@@ -155,6 +160,9 @@ class PostgresArticleStore:
             trust_score,
             quality_score,
             bucket,
+            sentiment_score,
+            sentiment_confidence,
+            sentiment_analysis_text,
             *rest,
         ) = row
         src = source_name or source_domain or "Unknown"
@@ -169,9 +177,9 @@ class PostgresArticleStore:
             "source": src,
             "category": bucket,  # reuse existing UI filter path; legacy category system is deprecated
             "category_confidence": float(trust_score or 0.0),
-            "sentiment_score": 0.0,
-            "sentiment_confidence": float(quality_score or 0.0),
-            "sentiment_analysis_text": excerpt,
+            "sentiment_score": float(sentiment_score or 0.0),
+            "sentiment_confidence": float(sentiment_confidence or 0.0),
+            "sentiment_analysis_text": sentiment_analysis_text or excerpt,
             "word_count": 0,
             "language": "en",
             "created_at": created_at.isoformat() if created_at else None,
