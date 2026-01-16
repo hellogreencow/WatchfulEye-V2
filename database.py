@@ -7,6 +7,7 @@ Includes comprehensive error handling, validation, and performance optimizations
 import sqlite3
 import json
 import re
+import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Union
 import logging
@@ -14,6 +15,7 @@ from contextlib import contextmanager
 import hashlib
 import time
 from pathlib import Path
+import requests
 
 logger = logging.getLogger(__name__)
 

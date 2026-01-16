@@ -292,6 +292,9 @@ db = NewsDatabase(db_path=DB_PATH)
 try:
     # Postgres-backed article access (Phase 4: hybrid search + better news display)
     from watchfuleye.storage.postgres_articles import PostgresArticleStore
+    from watchfuleye.storage.postgres_schema import ensure_postgres_schema
+    # Ensure schema exists before we serve any Postgres-backed endpoints.
+    ensure_postgres_schema(PG_DSN)
     _pg_articles = PostgresArticleStore(PG_DSN)
     logger.info(f"PostgresArticleStore initialized successfully with DSN: {PG_DSN[:50]}...")
 except Exception as e:
@@ -2702,7 +2705,99 @@ def get_top_events():
 def get_market_intelligence():
     """Get sophisticated market sentiment score with multi-factor analysis"""
     try:
-        intel = db.get_market_intelligence_score()
+        # Prefer Postgres truth layer when available (SQLite may be stale/empty).
+        if _pg_articles is not None:
+            import psycopg
+
+            with psycopg.connect(PG_DSN) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT sentiment_score, created_at, bucket
+                        FROM articles
+                        WHERE created_at >= now() - interval '7 days'
+                        """
+                    )
+                    rows = cur.fetchall()
+
+                    if not rows:
+                        intel = {
+                            "bullish_percentage": 50,
+                            "market_score": 0.0,
+                            "momentum": 0.0,
+                            "volatility": 0.0,
+                            "label": "Neutral",
+                            "confidence": 0.5,
+                        }
+                    else:
+                        now = datetime.now(timezone.utc)
+
+                        category_weights = {
+                            # buckets are used as categories in the UI; weight "main" slightly higher than "deals"
+                            "main": 1.2,
+                            "deals": 0.4,
+                        }
+
+                        weighted_sentiment = 0.0
+                        total_weight = 0.0
+                        vals: list[float] = []
+
+                        for s, created_at, bucket in rows:
+                            sc = float(s or 0.0)
+                            vals.append(sc)
+                            # Recency weight: today=1.0, yesterday=0.85, 2d ago=0.7, etc (clamped)
+                            days_ago = max(0.0, (now - created_at).total_seconds() / 86400.0) if created_at else 7.0
+                            recency_weight = max(0.3, 1.0 - (days_ago * 0.15))
+                            cat_weight = category_weights.get(str(bucket or "").lower(), 1.0)
+                            w = recency_weight * cat_weight
+                            weighted_sentiment += sc * w
+                            total_weight += w
+
+                        avg_sentiment = weighted_sentiment / max(total_weight, 1e-9)
+
+                        # Momentum: last 24h vs previous 6 days
+                        cur.execute(
+                            """
+                            SELECT AVG(sentiment_score)
+                            FROM articles
+                            WHERE created_at >= now() - interval '24 hours'
+                            """
+                        )
+                        last_24h = float((cur.fetchone() or [0.0])[0] or 0.0)
+                        cur.execute(
+                            """
+                            SELECT AVG(sentiment_score)
+                            FROM articles
+                            WHERE created_at < now() - interval '24 hours'
+                              AND created_at >= now() - interval '7 days'
+                            """
+                        )
+                        prev_6days = float((cur.fetchone() or [0.0])[0] or 0.0)
+                        momentum = last_24h - prev_6days
+
+                        # Volatility: standard deviation (bounded)
+                        if vals:
+                            mean = sum(vals) / len(vals)
+                            var = sum((v - mean) ** 2 for v in vals) / max(len(vals), 1)
+                            volatility = min((var ** 0.5) if var > 0 else 0.0, 1.0)
+                        else:
+                            volatility = 0.5
+
+                        market_score = avg_sentiment * 0.60 + momentum * 0.25 + (1 - volatility) * avg_sentiment * 0.15
+                        market_score = float(max(-1.0, min(1.0, market_score)))
+                        bullish_pct = int((market_score + 1) * 50)
+                        bullish_pct = max(0, min(100, bullish_pct))
+
+                        intel = {
+                            "bullish_percentage": bullish_pct,
+                            "market_score": round(market_score, 3),
+                            "momentum": round(momentum, 3),
+                            "volatility": round(volatility, 3),
+                            "label": "Bullish" if market_score > 0.05 else "Bearish" if market_score < -0.05 else "Neutral",
+                            "confidence": round(1 - volatility, 2),
+                        }
+        else:
+            intel = db.get_market_intelligence_score()
         response = jsonify({
             'success': True,
             'data': intel,
@@ -2723,12 +2818,120 @@ def get_market_intelligence():
 def get_sentiment_distribution():
     """Get granular sentiment distribution with 7 buckets (not just 3)"""
     try:
+        # Prefer Postgres truth layer if available.
+        if _pg_articles is not None:
+            import psycopg
+
+            with psycopg.connect(PG_DSN) as conn:
+                with conn.cursor() as cur:
+                    # Distribution + averages
+                    cur.execute(
+                        """
+                        SELECT
+                          COUNT(*) FILTER (WHERE sentiment_score >= 0.5) AS very_bullish,
+                          COUNT(*) FILTER (WHERE sentiment_score >= 0.2 AND sentiment_score < 0.5) AS bullish,
+                          COUNT(*) FILTER (WHERE sentiment_score >= 0.05 AND sentiment_score < 0.2) AS slightly_bullish,
+                          COUNT(*) FILTER (WHERE sentiment_score > -0.05 AND sentiment_score < 0.05) AS neutral,
+                          COUNT(*) FILTER (WHERE sentiment_score > -0.2 AND sentiment_score <= -0.05) AS slightly_bearish,
+                          COUNT(*) FILTER (WHERE sentiment_score > -0.5 AND sentiment_score <= -0.2) AS bearish,
+                          COUNT(*) FILTER (WHERE sentiment_score <= -0.5) AS very_bearish,
+                          COUNT(*) AS total,
+                          AVG(sentiment_score) AS avg_sentiment,
+                          AVG(sentiment_confidence) AS avg_confidence
+                        FROM articles
+                        WHERE created_at >= now() - interval '7 days'
+                        """
+                    )
+                    (
+                        very_bullish,
+                        bullish,
+                        slightly_bullish,
+                        neutral,
+                        slightly_bearish,
+                        bearish,
+                        very_bearish,
+                        total,
+                        avg_sentiment,
+                        avg_confidence,
+                    ) = cur.fetchone()
+
+                    # Sentiment by bucket (category analogue)
+                    cur.execute(
+                        """
+                        SELECT
+                          bucket,
+                          COUNT(*) AS count,
+                          AVG(sentiment_score) AS avg_sentiment,
+                          AVG(sentiment_confidence) AS avg_confidence
+                        FROM articles
+                        WHERE created_at >= now() - interval '7 days'
+                        GROUP BY bucket
+                        ORDER BY count DESC
+                        """
+                    )
+                    by_category = [
+                        {
+                            "category": str(bucket),
+                            "count": int(count or 0),
+                            "avg_sentiment": round(float(avg_s or 0.0), 3),
+                            "avg_confidence": round(float(avg_c or 0.0), 3),
+                        }
+                        for (bucket, count, avg_s, avg_c) in cur.fetchall()
+                    ]
+
+                    # Trend by day
+                    cur.execute(
+                        """
+                        SELECT
+                          (date_trunc('day', created_at))::date AS date,
+                          COUNT(*) AS count,
+                          AVG(sentiment_score) AS avg_sentiment,
+                          AVG(sentiment_confidence) AS avg_confidence
+                        FROM articles
+                        WHERE created_at >= now() - interval '7 days'
+                        GROUP BY (date_trunc('day', created_at))::date
+                        ORDER BY date ASC
+                        """
+                    )
+                    trend = [
+                        {
+                            "date": str(d),
+                            "count": int(count or 0),
+                            "avg_sentiment": round(float(avg_s or 0.0), 3),
+                            "avg_confidence": round(float(avg_c or 0.0), 3),
+                        }
+                        for (d, count, avg_s, avg_c) in cur.fetchall()
+                    ]
+
+            data = {
+                "distribution": {
+                    "very_bullish": int(very_bullish or 0),
+                    "bullish": int(bullish or 0),
+                    "slightly_bullish": int(slightly_bullish or 0),
+                    "neutral": int(neutral or 0),
+                    "slightly_bearish": int(slightly_bearish or 0),
+                    "bearish": int(bearish or 0),
+                    "very_bearish": int(very_bearish or 0),
+                    "total": int(total or 0),
+                },
+                "averages": {
+                    "sentiment": round(float(avg_sentiment or 0.0), 3),
+                    "confidence": round(float(avg_confidence or 0.0), 3),
+                },
+                "by_category": by_category,
+                "trend": trend,
+            }
+
+            return jsonify({"success": True, "data": data})
+
+        # Fallback: SQLite legacy path.
         with db.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Get sentiment distribution with 7 granular buckets
-            cursor.execute('''
-                SELECT 
+            cursor.execute(
+                """
+                SELECT
                     COUNT(CASE WHEN sentiment_score >= 0.5 THEN 1 END) as very_bullish,
                     COUNT(CASE WHEN sentiment_score >= 0.2 AND sentiment_score < 0.5 THEN 1 END) as bullish,
                     COUNT(CASE WHEN sentiment_score >= 0.05 AND sentiment_score < 0.2 THEN 1 END) as slightly_bullish,
@@ -2742,13 +2945,15 @@ def get_sentiment_distribution():
                 FROM articles
                 WHERE created_at > strftime('%Y-%m-%dT%H:%M:%f', 'now', '-7 days')
                     AND sentiment_score IS NOT NULL
-            ''')
-            
+                """
+            )
+
             result = cursor.fetchone()
-            
+
             # Sentiment by category
-            cursor.execute('''
-                SELECT 
+            cursor.execute(
+                """
+                SELECT
                     category,
                     COUNT(*) as count,
                     AVG(sentiment_score) as avg_sentiment,
@@ -2758,21 +2963,23 @@ def get_sentiment_distribution():
                     AND sentiment_score IS NOT NULL
                 GROUP BY category
                 ORDER BY count DESC
-            ''')
-            
+                """
+            )
+
             by_category = [
                 {
-                    'category': row['category'],
-                    'count': row['count'],
-                    'avg_sentiment': round(row['avg_sentiment'], 3),
-                    'avg_confidence': round(row['avg_confidence'], 3)
+                    "category": row["category"],
+                    "count": row["count"],
+                    "avg_sentiment": round(row["avg_sentiment"], 3),
+                    "avg_confidence": round(row["avg_confidence"], 3),
                 }
                 for row in cursor.fetchall()
             ]
-            
+
             # Sentiment trend over last 7 days (by day)
-            cursor.execute('''
-                SELECT 
+            cursor.execute(
+                """
+                SELECT
                     DATE(created_at) as date,
                     COUNT(*) as count,
                     AVG(sentiment_score) as avg_sentiment,
@@ -2782,38 +2989,39 @@ def get_sentiment_distribution():
                     AND sentiment_score IS NOT NULL
                 GROUP BY DATE(created_at)
                 ORDER BY date ASC
-            ''')
-            
+                """
+            )
+
             trend = [
                 {
-                    'date': row['date'],
-                    'count': row['count'],
-                    'avg_sentiment': round(row['avg_sentiment'], 3),
-                    'avg_confidence': round(row['avg_confidence'], 3)
+                    "date": row["date"],
+                    "count": row["count"],
+                    "avg_sentiment": round(row["avg_sentiment"], 3),
+                    "avg_confidence": round(row["avg_confidence"], 3),
                 }
                 for row in cursor.fetchall()
             ]
-            
+
             data = {
-                'distribution': {
-                    'very_bullish': result['very_bullish'],
-                    'bullish': result['bullish'],
-                    'slightly_bullish': result['slightly_bullish'],
-                    'neutral': result['neutral'],
-                    'slightly_bearish': result['slightly_bearish'],
-                    'bearish': result['bearish'],
-                    'very_bearish': result['very_bearish'],
-                    'total': result['total']
+                "distribution": {
+                    "very_bullish": result["very_bullish"],
+                    "bullish": result["bullish"],
+                    "slightly_bullish": result["slightly_bullish"],
+                    "neutral": result["neutral"],
+                    "slightly_bearish": result["slightly_bearish"],
+                    "bearish": result["bearish"],
+                    "very_bearish": result["very_bearish"],
+                    "total": result["total"],
                 },
-                'averages': {
-                    'sentiment': round(result['avg_sentiment'], 3),
-                    'confidence': round(result['avg_confidence'], 3)
+                "averages": {
+                    "sentiment": round(result["avg_sentiment"], 3),
+                    "confidence": round(result["avg_confidence"], 3),
                 },
-                'by_category': by_category,
-                'trend': trend
+                "by_category": by_category,
+                "trend": trend,
             }
-            
-            return jsonify({'success': True, 'data': data})
+
+            return jsonify({"success": True, "data": data})
             
     except Exception as e:
         logger.error(f"Sentiment distribution error: {e}")
@@ -2827,25 +3035,99 @@ def get_stats():
     try:
         stats = db.get_stats()
         
-        # Override total_articles from Postgres if available (articles are in Postgres, not SQLite)
+        # Override key dashboard stats from Postgres if available (primary ingest truth).
         if _pg_articles is not None:
             try:
                 import psycopg
                 with psycopg.connect(PG_DSN) as conn:
                     with conn.cursor() as cur:
+                        # Totals
                         cur.execute("SELECT COUNT(*) FROM articles")
                         row = cur.fetchone()
                         if row and row[0] is not None:
-                            stats['total_articles'] = int(row[0])
-                            
-                        # Also update recent_articles_count from Postgres (last 24h)
-                        cur.execute("""
+                            stats["total_articles"] = int(row[0])
+
+                        # Recent articles (last 24h)
+                        cur.execute(
+                            """
                             SELECT COUNT(*) FROM articles
                             WHERE created_at >= now() - interval '24 hours'
-                        """)
+                            """
+                        )
                         row = cur.fetchone()
                         if row and row[0] is not None:
-                            stats['recent_articles_count'] = int(row[0])
+                            stats["recent_articles_count"] = int(row[0])
+
+                        # Categories (buckets) count mapping
+                        cur.execute(
+                            """
+                            SELECT bucket, COUNT(*) AS count
+                            FROM articles
+                            WHERE created_at >= now() - interval '7 days'
+                            GROUP BY bucket
+                            ORDER BY count DESC
+                            """
+                        )
+                        stats["articles_by_category"] = {str(r[0]): int(r[1] or 0) for r in cur.fetchall()}
+
+                        # Sentiment (3-bucket) for dashboard summary (last 7 days)
+                        cur.execute(
+                            """
+                            SELECT
+                              SUM(CASE WHEN sentiment_score > 0.1 THEN 1 ELSE 0 END) AS positive,
+                              SUM(CASE WHEN sentiment_score < -0.1 THEN 1 ELSE 0 END) AS negative,
+                              SUM(CASE WHEN sentiment_score >= -0.1 AND sentiment_score <= 0.1 THEN 1 ELSE 0 END) AS neutral
+                            FROM articles
+                            WHERE created_at >= now() - interval '7 days'
+                            """
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            stats["articles_by_sentiment"] = {
+                                "positive": int(row[0] or 0),
+                                "negative": int(row[1] or 0),
+                                "neutral": int(row[2] or 0),
+                            }
+
+                        # Daily processing volume (last 7 days) with sentiment breakdown percentages
+                        cur.execute(
+                            """
+                            SELECT
+                              (date_trunc('day', created_at))::date AS date,
+                              COUNT(*) AS total_count,
+                              SUM(CASE WHEN sentiment_score > 0.1 THEN 1 ELSE 0 END) AS positive_count,
+                              SUM(CASE WHEN sentiment_score < -0.1 THEN 1 ELSE 0 END) AS negative_count,
+                              SUM(CASE WHEN sentiment_score >= -0.1 AND sentiment_score <= 0.1 THEN 1 ELSE 0 END) AS neutral_count
+                            FROM articles
+                            WHERE created_at >= now() - interval '7 days'
+                            GROUP BY (date_trunc('day', created_at))::date
+                            ORDER BY date ASC
+                            """
+                        )
+                        daily_counts = []
+                        for d, total, pos, neg, neu in cur.fetchall():
+                            total_i = int(total or 0)
+                            if total_i > 0:
+                                daily_counts.append(
+                                    {
+                                        "date": str(d),
+                                        "count": total_i,
+                                        "sentiment_positive": round((int(pos or 0) / total_i) * 100, 1),
+                                        "sentiment_negative": round((int(neg or 0) / total_i) * 100, 1),
+                                        "sentiment_neutral": round((int(neu or 0) / total_i) * 100, 1),
+                                    }
+                                )
+                            else:
+                                daily_counts.append(
+                                    {
+                                        "date": str(d),
+                                        "count": 0,
+                                        "sentiment_positive": 0,
+                                        "sentiment_negative": 0,
+                                        "sentiment_neutral": 100,
+                                    }
+                                )
+                        stats["daily_counts"] = daily_counts
             except Exception as e:
                 logger.warning(f"Failed to get Postgres stats, using SQLite: {e}")
         

@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 
 from watchfuleye.ingestion.article_types import ArticleCandidate
 from watchfuleye.ingestion.url_utils import canonicalize_url, url_hash
+from watchfuleye.scoring.sentiment import score_market_sentiment
 
 
 class PostgresRepo:
@@ -63,6 +64,8 @@ class PostgresRepo:
                     excerpt = None
                     if it.description:
                         excerpt = it.description.strip()[:500]
+                    # Deterministic market sentiment (risk-on/off proxy)
+                    sent = score_market_sentiment(it.title or "", it.description or "")
                     raw = it.raw or {}
                     # Keep the original url in raw for provenance
                     raw.setdefault("original_url", it.url)
@@ -71,12 +74,14 @@ class PostgresRepo:
                         INSERT INTO articles (
                           canonical_url, url_hash, content_hash, title, description, excerpt, published_at,
                           source_domain, source_name, language, ingestion_source, raw,
-                          bucket, extraction_confidence, trust_score, quality_score
+                          bucket, extraction_confidence, trust_score, quality_score,
+                          sentiment_score, sentiment_confidence, sentiment_analysis_text
                         )
                         VALUES (
                           %(canonical_url)s, %(url_hash)s, %(content_hash)s, %(title)s, %(description)s, %(excerpt)s, %(published_at)s,
                           %(source_domain)s, %(source_name)s, %(language)s, %(ingestion_source)s, %(raw)s,
-                          %(bucket)s, %(extraction_confidence)s, %(trust_score)s, %(quality_score)s
+                          %(bucket)s, %(extraction_confidence)s, %(trust_score)s, %(quality_score)s,
+                          %(sentiment_score)s, %(sentiment_confidence)s, %(sentiment_analysis_text)s
                         )
                         ON CONFLICT (url_hash) DO UPDATE SET
                           canonical_url = EXCLUDED.canonical_url,
@@ -91,6 +96,9 @@ class PostgresRepo:
                           ingestion_source = COALESCE(EXCLUDED.ingestion_source, articles.ingestion_source),
                           bucket = COALESCE(EXCLUDED.bucket, articles.bucket),
                           raw = COALESCE(EXCLUDED.raw, articles.raw),
+                          sentiment_score = EXCLUDED.sentiment_score,
+                          sentiment_confidence = EXCLUDED.sentiment_confidence,
+                          sentiment_analysis_text = COALESCE(EXCLUDED.sentiment_analysis_text, articles.sentiment_analysis_text),
                           updated_at = now()
                         ;
                         """,
@@ -111,6 +119,9 @@ class PostgresRepo:
                             "extraction_confidence": 0.0,
                             "trust_score": 0.5,
                             "quality_score": 0.0,
+                            "sentiment_score": float(sent.score),
+                            "sentiment_confidence": float(sent.confidence),
+                            "sentiment_analysis_text": sent.reasoning,
                         },
                     )
                     processed += 1

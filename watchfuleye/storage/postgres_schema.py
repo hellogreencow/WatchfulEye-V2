@@ -65,6 +65,10 @@ SCHEMA_STATEMENTS: list[str] = [
     # Backward-compatible column adds (safe if table already exists)
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_hash TEXT;",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS bucket TEXT NOT NULL DEFAULT 'main';",
+    # Market sentiment (deterministic, no external model calls)
+    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS sentiment_score REAL NOT NULL DEFAULT 0.0;",
+    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS sentiment_confidence REAL NOT NULL DEFAULT 0.0;",
+    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS sentiment_analysis_text TEXT;",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS fulltext_fetched_at TIMESTAMPTZ;",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS fulltext_fetch_status TEXT;",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS fulltext_fetch_error TEXT;",
