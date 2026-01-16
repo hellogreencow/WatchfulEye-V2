@@ -70,3 +70,17 @@ def require_admin(f: Callable[..., Any]) -> Callable[..., Any]:
     return decorated
 
 
+def require_user(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator: require any authenticated user (admin or not)."""
+
+    @wraps(f)
+    def decorated(*args: Any, **kwargs: Any):
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "Authentication required"}), 401
+        g.current_user = user
+        return f(*args, **kwargs)
+
+    return decorated
+
+
