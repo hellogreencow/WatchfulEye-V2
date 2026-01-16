@@ -15,7 +15,8 @@ from flask import Blueprint, jsonify, request
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from watchfuleye.v3.admin_auth import require_admin
+from watchfuleye.v3.admin_auth import require_admin, require_user
+from watchfuleye.v3.alerts.inbox_state_store import get_last_seen_event_id, set_last_seen_event_id
 from watchfuleye.v3.flags import is_v3_alerts_enabled
 
 
@@ -132,5 +133,115 @@ def list_alert_events():
             )
             rows = cur.fetchall()
     return jsonify({"success": True, "data": rows, "count": len(rows)})
+
+
+@bp_v3_alerts.route("/inbox", methods=["GET"])
+@require_user
+def get_alert_inbox():
+    """Return recent in-app events plus unread count for the current user.
+
+    Unread is defined as events with id > last_seen_event_id for this user.
+    """
+    if not is_v3_alerts_enabled():
+        return jsonify({"success": False, "error": "V3 alerts disabled"}), 404
+    pg_dsn = _get_pg_dsn()
+    if not pg_dsn:
+        return jsonify({"success": False, "error": "PG_DSN not configured"}), 503
+
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except Exception:
+        limit = 100
+    limit = max(1, min(limit, 500))
+
+    try:
+        from flask import g as flask_g
+
+        current_user = getattr(flask_g, "current_user", None) or {}
+    except Exception:
+        current_user = {}
+
+    uid = int(current_user.get("id") or 0)
+    if uid <= 0:
+        return jsonify({"success": False, "error": "Invalid user context"}), 500
+    last_seen = get_last_seen_event_id(user_id=uid)
+
+    with psycopg.connect(pg_dsn, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM alert_events e
+                JOIN alert_rules r ON r.id = e.rule_id
+                WHERE e.id > %s
+                  AND COALESCE(r.channels, ARRAY[]::text[]) @> ARRAY['in_app']::text[]
+                """,
+                (last_seen,),
+            )
+            unread_row = cur.fetchone() or {}
+            unread = int(unread_row.get("n") or 0)
+
+            cur.execute(
+                """
+                SELECT e.id, e.rule_id, r.name AS rule_name, r.rule_type,
+                       e.event_type, e.payload, e.created_at, e.delivered_at, e.delivery_error
+                FROM alert_events e
+                JOIN alert_rules r ON r.id = e.rule_id
+                WHERE COALESCE(r.channels, ARRAY[]::text[]) @> ARRAY['in_app']::text[]
+                ORDER BY e.created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+
+    newest_id = 0
+    for r in rows:
+        try:
+            newest_id = max(newest_id, int(r.get("id") or 0))
+        except Exception:
+            pass
+
+    return jsonify(
+        {
+            "success": True,
+            "data": rows,
+            "count": len(rows),
+            "unread_count": unread,
+            "last_seen_event_id": last_seen,
+            "newest_event_id": newest_id,
+        }
+    )
+
+
+@bp_v3_alerts.route("/inbox/mark-seen", methods=["POST"])
+@require_user
+def mark_alerts_seen():
+    """Advance last_seen_event_id for the current user.
+
+    Body:
+      { "last_seen_event_id": 123 }
+    """
+    if not is_v3_alerts_enabled():
+        return jsonify({"success": False, "error": "V3 alerts disabled"}), 404
+
+    try:
+        from flask import g as flask_g
+
+        current_user = getattr(flask_g, "current_user", None) or {}
+    except Exception:
+        current_user = {}
+
+    uid = int(current_user.get("id") or 0)
+    if uid <= 0:
+        return jsonify({"success": False, "error": "Invalid user context"}), 500
+    body = request.get_json(silent=True) or {}
+    try:
+        desired = int(body.get("last_seen_event_id") or 0)
+    except Exception:
+        desired = 0
+
+    stored = set_last_seen_event_id(user_id=uid, last_seen_event_id=desired)
+    return jsonify({"success": True, "last_seen_event_id": stored})
 
 
