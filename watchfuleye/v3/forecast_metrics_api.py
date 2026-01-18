@@ -51,9 +51,12 @@ def get_forecast_metrics():
     if not is_v3_forecast_tracking_enabled():
         return ("Not Found", 404)
 
-    pg_dsn = os.environ.get("PG_DSN")
-    if not pg_dsn:
-        return jsonify({"error": "Database not configured"}), 500
+    # Keep localhost development frictionless: `web_app.py` provides a default DSN even when `PG_DSN`
+    # isn't explicitly exported. Mirror that behavior here so the metrics endpoint doesn't hard-fail.
+    pg_dsn = os.environ.get(
+        "PG_DSN",
+        "dbname=watchfuleye user=watchful password=watchfulpass host=localhost port=5432",
+    )
 
     # UX guardrails: never imply statistical confidence at tiny sample sizes.
     guardrails = {
@@ -305,6 +308,9 @@ def get_forecast_metrics():
             "guardrails": guardrails,
         })
 
+    except psycopg.Error as e:
+        # Prefer a clear operational error over a 500 that looks like a code bug.
+        return jsonify({"error": f"Postgres error: {str(e)}"}), 503
     except Exception as e:
         return jsonify({"error": f"Internal error: {str(e)}"}), 500
 

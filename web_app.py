@@ -2239,10 +2239,21 @@ def login():
         except Exception as e:
             logger.error(f"Error fetching profile picture during login: {e}")
 
+        # NOTE: For localhost development, browsers will not persist `Secure` cookies over http.
+        # To keep dev unblocked, we return `session_token` in the JSON response and relax cookie
+        # flags on localhost (secure=False, SameSite=Lax). Production keeps Secure+Strict.
+        is_localhost = False
+        try:
+            host = (request.host or "").split(":")[0].strip().lower()
+            is_localhost = host in {"localhost", "127.0.0.1", "::1"}
+        except Exception:
+            is_localhost = False
+
         # Set secure httpOnly cookie for session token
         response = jsonify({
             'success': True,
             'message': 'Login successful',
+            'session_token': session_token,
             'user': {
                 'id': user['id'],
                 'username': user['username'],
@@ -2259,8 +2270,8 @@ def login():
             'session_token',
             session_token,
             httponly=True,
-            secure=True,
-            samesite='Strict',
+            secure=(not is_localhost),
+            samesite=('Lax' if is_localhost else 'Strict'),
             max_age=7*24*3600  # 7 days
         )
 
@@ -2294,7 +2305,21 @@ def logout():
             'success': True,
             'message': 'Logout successful'
         })
-        response.set_cookie('session_token', '', expires=0, httponly=True, secure=True, samesite='Strict')
+        is_localhost = False
+        try:
+            host = (request.host or "").split(":")[0].strip().lower()
+            is_localhost = host in {"localhost", "127.0.0.1", "::1"}
+        except Exception:
+            is_localhost = False
+
+        response.set_cookie(
+            'session_token',
+            '',
+            expires=0,
+            httponly=True,
+            secure=(not is_localhost),
+            samesite=('Lax' if is_localhost else 'Strict'),
+        )
 
         return response
 

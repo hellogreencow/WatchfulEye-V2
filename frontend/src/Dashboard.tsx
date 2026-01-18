@@ -199,9 +199,12 @@ const authAPI = {
       console.log('Login response data:', response.data);
       
       if (response.data.success) {
-        console.log('Login successful, token stored in httpOnly cookie');
-        // Token is now automatically handled by httpOnly cookie
-        // No need to manually store in localStorage
+        console.log('Login successful');
+        // Prefer explicit session_token (needed for localhost http where Secure cookies won't persist).
+        if (response.data.session_token) {
+          localStorage.setItem('auth_token', response.data.session_token);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.session_token}`;
+        }
         return response.data.user;
       }
       throw new Error(response.data.error || 'Login failed');

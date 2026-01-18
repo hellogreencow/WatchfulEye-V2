@@ -99,7 +99,8 @@ export function Login({ onLogin }: { onLogin?: () => void }) {
           // Redirect after animation completes
           setTimeout(() => {
             // Store auth token for Dashboard to detect
-            localStorage.setItem('auth_token', 'authenticated');
+            // NOTE: Dashboard auth stores a real session token on successful login/register.
+            // Do not overwrite it with a placeholder value.
             if (onLogin) {
               onLogin();
             } else {

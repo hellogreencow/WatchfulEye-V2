@@ -82,8 +82,10 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const base = (apiBaseUrl || '').replace(/\/+$/, '');
-        const response = await fetch(`${base}/api/v3/forecast/metrics`);
+        // apiBaseUrl is expected to be the API base path (usually "/api").
+        // Avoid generating "/api/api/..." (which returns index.html and breaks JSON parsing).
+        const base = (apiBaseUrl || '/api').replace(/\/+$/, '');
+        const response = await fetch(`${base}/v3/forecast/metrics`);
         if (response.status === 404) {
           // Feature not enabled
           setError('Forecast tracking not enabled');
@@ -92,6 +94,15 @@ export function AccuracyPanel({ apiBaseUrl }: { apiBaseUrl?: string }) {
         }
         if (!response.ok) {
           throw new Error(`Failed to fetch metrics: ${response.statusText}`);
+        }
+        // Defensive: if a misrouted request returns HTML (index.html), surface a clear error.
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          const text = await response.text();
+          throw new Error(
+            `Metrics endpoint did not return JSON (content-type: ${contentType}). ` +
+              `First bytes: ${text.slice(0, 64).replace(/\s+/g, ' ')}`
+          );
         }
         const data = await response.json();
         setMetrics(data);

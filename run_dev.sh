@@ -47,6 +47,14 @@ install_direct_dependencies() {
 start_backend() {
     echo -e "${GREEN}Starting Flask backend server on port 5002...${NC}"
     cd "$(dirname "$0")"
+
+    # If the backend is already running, don't treat that as failure (common during dev).
+    if command -v lsof >/dev/null 2>&1; then
+        if lsof -ti :5002 >/dev/null 2>&1; then
+            echo -e "${YELLOW}Backend already running on port 5002. Skipping backend startup.${NC}"
+            return 0
+        fi
+    fi
     
     # Check if virtual environment exists
     if [ ! -d "venv" ]; then
