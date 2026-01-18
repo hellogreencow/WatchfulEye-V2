@@ -115,6 +115,14 @@ start_backend() {
 start_frontend() {
     echo -e "${GREEN}Starting React frontend on port 3000...${NC}"
     cd "$(dirname "$0")/frontend"
+
+    # If the frontend is already running, don't treat that as failure (common during dev).
+    if command -v lsof &> /dev/null; then
+        if lsof -ti :3000 >/dev/null 2>&1; then
+            echo -e "${YELLOW}Frontend already running on port 3000. Skipping frontend startup.${NC}"
+            return 0
+        fi
+    fi
     
     # Install dependencies if needed
     if [ ! -d "node_modules" ]; then
@@ -135,7 +143,7 @@ start_frontend() {
 cleanup() {
     echo -e "${YELLOW}Shutting down servers...${NC}"
     # Kill any background processes started by this script
-    jobs -p | xargs -r kill
+    jobs -p | xargs -r kill 2>/dev/null || true
     echo -e "${GREEN}Servers stopped.${NC}"
     exit 0
 }
