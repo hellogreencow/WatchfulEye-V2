@@ -12,6 +12,7 @@ import { AuthProvider } from './Dashboard';
 import { V3ExaminePage } from './v3/examine/ExaminePage';
 import { MonitorPage } from './v3/alerts/MonitorPage';
 import { CommandCenterPage } from './v3/command/CommandCenterPage';
+import { TrackRecordPage } from './v3/forecast/TrackRecordPage';
 
 function App() {
   // IMPORTANT: The app must remain functional even if a build is accidentally produced with
@@ -23,6 +24,7 @@ function App() {
   const isV3ExamineUI = isLocalhost || process.env.REACT_APP_V3_EXAMINE_UI === 'true';
   const isV3AlertsUI = isLocalhost || process.env.REACT_APP_V3_ALERTS === 'true';
   const isV3CommandCenterUI = isLocalhost || process.env.REACT_APP_V3_COMMAND_CENTER === 'true';
+  const isV3ForecastTrackingUI = isLocalhost || process.env.REACT_APP_V3_FORECAST_TRACKING === 'true';
   // Don't check auth_token here - let Dashboard handle its own auth
   // This ensures landing page always shows for unauthenticated users
   const hasAuthToken = !!localStorage.getItem('auth_token');
@@ -64,6 +66,14 @@ function App() {
 
           {/* V3 Examine (if enabled) */}
           {isV3ExamineUI && <Route path="/v3/examine" element={<V3ExaminePage />} />}
+
+          {/* V3 Track Record (if enabled) */}
+          {isV3ForecastTrackingUI && (
+            <Route
+              path="/v3/track"
+              element={hasAuthToken ? <TrackRecordPage /> : <Navigate to="/login" replace />}
+            />
+          )}
 
           {/* Figma Preview (if enabled) */}
           {isFigmaMode && <Route path="/figma-preview" element={<FigmaPreview />} />}

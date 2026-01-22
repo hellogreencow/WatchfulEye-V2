@@ -20,8 +20,6 @@ import { useAnalysis } from './lib/useAnalysis';
 import type { AnalysisStructured } from './lib/analysisTypes';
 import { MessageActions, SmartSuggestions, InsightBadge, exportConversation } from './components/ChatEnhancements';
 import RAGAnimation from './components/RAGAnimation';
-import { AccuracyPanel } from './components/forecast/AccuracyPanel';
-import { ApiKeysPanel } from './components/forecast/ApiKeysPanel';
 
 // API Base URL resolution
 // - Default: relative `/api` (nginx reverse proxy in production)
@@ -199,9 +197,12 @@ const authAPI = {
       console.log('Login response data:', response.data);
       
       if (response.data.success) {
-        console.log('Login successful, token stored in httpOnly cookie');
-        // Token is now automatically handled by httpOnly cookie
-        // No need to manually store in localStorage
+        console.log('Login successful');
+        // Prefer explicit session_token (needed for localhost http where Secure cookies won't persist).
+        if (response.data.session_token) {
+          localStorage.setItem('auth_token', response.data.session_token);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.session_token}`;
+        }
         return response.data.user;
       }
       throw new Error(response.data.error || 'Login failed');
@@ -2666,15 +2667,15 @@ function MinimalistDashboard({
   const auth = useAuth();
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
 
-  // Localhost dev convenience: always show WS6.1 panels post-login without needing REACT_APP flags.
-  // Non-local environments still require the explicit flag.
+  // Localhost dev convenience exists for V3 routes, but we keep the main Dashboard "sacred" and
+  // avoid dumping half-built V3 panels into it by default (reduces confusion during dev).
   const isLocalhost =
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1' ||
       window.location.hostname === '::1');
   const isV3ForecastTrackingEnabled =
-    isLocalhost || (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true';
+    (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true';
   const isAdmin = auth.user?.role === 'admin';
 
   // If the user clicked "AI Deep Analysis" on a public Briefings card, we stash the article in localStorage,
@@ -3072,30 +3073,29 @@ function MinimalistDashboard({
           </div>
         </div>
 
-        {/* WS6.1 (post-login, localhost-first): Track Record + Integrations */}
-        {isV3ForecastTrackingEnabled && (
+        {/* V3 shortcuts (keep Dashboard clean; V3 lives on dedicated routes) */}
+        {(isLocalhost || isV3ForecastTrackingEnabled) && (
           <div className="px-0 sm:px-2 lg:px-4">
             <Card className="bg-white/70 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700">
               <CardHeader className="pb-2">
-                <CardTitle className="text-slate-900 dark:text-slate-100">
-                  WS6.1 — Track Record
-                </CardTitle>
+                <CardTitle className="text-slate-900 dark:text-slate-100">V3 (dev)</CardTitle>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {isLocalhost
-                    ? 'Local dev shows this automatically on localhost so you can validate the loop fast.'
-                    : 'Enable with REACT_APP_V3_FORECAST_TRACKING=true.'}
+                  Keep the main Dashboard stable; use these dedicated V3 routes for new surfaces.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <AccuracyPanel apiBaseUrl={API_BASE_URL} />
-
-                {isAdmin ? (
-                  <ApiKeysPanel apiBaseUrl={API_BASE_URL} />
-                ) : (
-                  <div className="text-sm text-slate-600 dark:text-slate-400">
-                    Integrations are admin-only.
-                  </div>
-                )}
+              <CardContent className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => (window.location.href = '/v3/command')}>
+                  Command Center
+                </Button>
+                <Button variant="outline" onClick={() => (window.location.href = '/v3/examine')}>
+                  Examine
+                </Button>
+                <Button variant="outline" onClick={() => (window.location.href = '/monitor')}>
+                  Monitor
+                </Button>
+                <Button variant="outline" onClick={() => (window.location.href = '/v3/track')}>
+                  Track Record
+                </Button>
               </CardContent>
             </Card>
           </div>
@@ -3871,16 +3871,7 @@ function AnalyticsModal({ isOpen, onClose, stats, sentimentDist, marketIntel }: 
               ))}
             </div>
 
-            {/* WS6.1: Forecast Accountability Panel */}
-            {((typeof window !== 'undefined' &&
-              (window.location.hostname === 'localhost' ||
-                window.location.hostname === '127.0.0.1' ||
-                window.location.hostname === '::1')) ||
-              (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true') && (
-              <div className="mb-8">
-                <AccuracyPanel />
-              </div>
-            )}
+            {/* Keep V3 panels off the sacred Dashboard; use dedicated V3 routes instead. */}
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -4698,13 +4689,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const isLocalhost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '::1');
-  const isV3ForecastTrackingEnabled =
-    isLocalhost || (process.env.REACT_APP_V3_FORECAST_TRACKING ?? '').trim().toLowerCase() === 'true';
+  // Keep admin focused; integrations live on `/v3/track` now (behind flags) rather than adding more tabs here.
 
   useEffect(() => {
     const fetchAdminStats = async () => {
@@ -4773,18 +4758,6 @@ function AdminDashboard() {
         >
           User Management
         </button>
-        {isV3ForecastTrackingEnabled && (
-          <button
-            className={`py-2 px-4 text-sm font-medium ${
-              activeTab === 'integrations' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('integrations')}
-          >
-            Integrations
-          </button>
-        )}
       </div>
 
       {/* Admin dashboard content */}
@@ -4939,10 +4912,7 @@ function AdminDashboard() {
         <UserManagement />
       )}
 
-      {/* Integrations (WS6.1) */}
-      {isV3ForecastTrackingEnabled && activeTab === 'integrations' && (
-        <ApiKeysPanel apiBaseUrl={API_BASE_URL} />
-      )}
+      {/* Integrations live on `/v3/track` (WS6.1). */}
     </div>
   );
 }

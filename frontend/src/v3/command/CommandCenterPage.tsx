@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -66,6 +66,17 @@ export function CommandCenterPage(): React.ReactElement {
   });
   const [selected, setSelected] = useState<CommandEvent | null>(null);
   const [showSynthetic, setShowSynthetic] = useState(true);
+  const [examineQuery, setExamineQuery] = useState('');
+
+  const [alertsUnread, setAlertsUnread] = useState<number | null>(null);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+
+  const [trackRecordSummary, setTrackRecordSummary] = useState<{
+    total: number;
+    resolved: number;
+    pending: number;
+  } | null>(null);
+  const [trackRecordError, setTrackRecordError] = useState<string | null>(null);
 
   const events = useMemo(() => {
     const base = showSynthetic ? PLACEHOLDER_EVENTS.concat(EXTRA_PLACEHOLDER_EVENTS) : PLACEHOLDER_EVENTS;
@@ -78,6 +89,63 @@ export function CommandCenterPage(): React.ReactElement {
       .filter((e) => enabledIds.has(e.layer))
       .sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0)); // newest first
   }, [activeLayers, showSynthetic]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    // LIVE: Monitor inbox unread (WS6). If WS6 is disabled or Postgres isn't configured, this will error.
+    (async () => {
+      try {
+        setAlertsError(null);
+        const res = await fetch('/api/v3/alerts/inbox?limit=1', { credentials: 'include' });
+        if (res.status === 404) {
+          setAlertsError('Alerts disabled (V3_ALERTS)');
+          setAlertsUnread(null);
+          return;
+        }
+        if (!res.ok) {
+          const txt = await res.text();
+          setAlertsError(`Inbox error (${res.status}): ${txt.slice(0, 64)}`);
+          setAlertsUnread(null);
+          return;
+        }
+        const data = await res.json();
+        setAlertsUnread(typeof data?.unread_count === 'number' ? data.unread_count : Number(data?.unread_count || 0));
+      } catch (e: any) {
+        setAlertsError(e?.message ? String(e.message) : 'Inbox request failed');
+        setAlertsUnread(null);
+      }
+    })();
+
+    // LIVE: Track Record summary (WS6.1).
+    (async () => {
+      try {
+        setTrackRecordError(null);
+        const res = await fetch('/api/v3/forecast/metrics', { credentials: 'include' });
+        if (res.status === 404) {
+          setTrackRecordError('Forecast tracking disabled (V3_FORECAST_TRACKING)');
+          setTrackRecordSummary(null);
+          return;
+        }
+        if (!res.ok) {
+          const txt = await res.text();
+          setTrackRecordError(`Track Record error (${res.status}): ${txt.slice(0, 64)}`);
+          setTrackRecordSummary(null);
+          return;
+        }
+        const data = await res.json();
+        const overall = data?.overall || {};
+        setTrackRecordSummary({
+          total: Number(overall.total_forecasts || 0),
+          resolved: Number(overall.resolved_forecasts || 0),
+          pending: Number(overall.pending_forecasts || 0),
+        });
+      } catch (e: any) {
+        setTrackRecordError(e?.message ? String(e.message) : 'Track Record request failed');
+        setTrackRecordSummary(null);
+      }
+    })();
+  }, [enabled]);
 
   if (!enabled) {
     return (
@@ -114,6 +182,115 @@ export function CommandCenterPage(): React.ReactElement {
           </Button>
         </div>
       </div>
+
+      {/* Operator bar: real links + real status, with explicit placeholder labeling */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center justify-between gap-3">
+            <span>Operator</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">LIVE: Examine + Monitor + Track Record</Badge>
+              <Badge variant="secondary">PLACEHOLDER: Map + signals</Badge>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              className="h-10 w-full rounded-md border bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              placeholder="Examine X… (e.g., 'Venezuela election unrest next 30 days')"
+              value={examineQuery}
+              onChange={(e) => setExamineQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const q = examineQuery.trim();
+                  if (!q) return;
+                  window.location.href = `/v3/examine?q=${encodeURIComponent(q)}`;
+                }
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  const q = examineQuery.trim();
+                  if (!q) return;
+                  window.location.href = `/v3/examine?q=${encodeURIComponent(q)}`;
+                }}
+              >
+                Examine
+              </Button>
+              <Button variant="outline" onClick={() => (window.location.href = '/monitor')}>
+                Monitor
+              </Button>
+              <Button variant="outline" onClick={() => (window.location.href = '/v3/track')}>
+                Track Record
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Card className="border-slate-200 dark:border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Monitor inbox</span>
+                  <Badge>LIVE</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-slate-700 dark:text-slate-200">
+                {alertsError ? (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{alertsError}</div>
+                ) : (
+                  <div>
+                    Unread:{' '}
+                    <strong className="text-slate-900 dark:text-slate-50">
+                      {alertsUnread === null ? '—' : alertsUnread}
+                    </strong>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 dark:border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Track Record</span>
+                  <Badge>LIVE</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-slate-700 dark:text-slate-200">
+                {trackRecordError ? (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{trackRecordError}</div>
+                ) : (
+                  <div className="space-y-1">
+                    <div>
+                      Tracked:{' '}
+                      <strong className="text-slate-900 dark:text-slate-50">
+                        {trackRecordSummary ? trackRecordSummary.total : '—'}
+                      </strong>
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Resolved {trackRecordSummary ? trackRecordSummary.resolved : '—'} · Pending{' '}
+                      {trackRecordSummary ? trackRecordSummary.pending : '—'}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 dark:border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Map layers</span>
+                  <Badge variant="secondary">PLACEHOLDER</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-slate-700 dark:text-slate-200">
+                Toggle layers above. Next slice swaps placeholders for real connectors + citations.
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
